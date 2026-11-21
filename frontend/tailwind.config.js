@@ -30,7 +30,7 @@ export default {
           foreground: "hsl(var(--muted-foreground))",
         },
         accent: {
-          DEFAULT: "hsl(var(--accient))",
+          DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
         },
         popover: {
@@ -54,8 +54,8 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "Fira Code", "monospace"],
+        sans: ["Source Code Pro", "ui-monospace", "JetBrains Mono", "Fira Code", "system-ui", "sans-serif"],
+        mono: ["Source Code Pro", "JetBrains Mono", "Fira Code", "ui-monospace", "monospace"],
       },
       keyframes: {
         "accordion-down": {

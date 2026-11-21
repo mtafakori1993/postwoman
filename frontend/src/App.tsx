@@ -1,10 +1,14 @@
-import React, { useCallback, useEffect, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useState } from "react"
 import { Sidebar } from "./components/Layout/Sidebar"
 import { TopBar } from "./components/Layout/TopBar"
 import { RequestTabs } from "./components/RequestTabs"
 import { RequestEditor } from "./components/RequestEditor"
 import { ResponseViewer } from "./components/ResponseViewer"
-import { SearchPalette } from "./components/SearchPalette"
+import { CommandPalette } from "./components/CommandPalette"
+import { ShortcutsDialog } from "./components/ShortcutsDialog"
+import { CodeExportDialog } from "./components/CodeExportDialog"
+import { ImportCurlDialog } from "./components/ImportCurlDialog"
+import { AIAssistant } from "./components/AIAssistant"
 import { RunnerDialog } from "./components/RunnerDialog"
 import { useWorkspaceStore, newRequestDraft } from "./stores/workspace"
 import * as api from "./lib/api"
@@ -18,7 +22,10 @@ import {
   DialogTitle,
 } from "./components/ui/dialog"
 import { Button } from "./components/ui/button"
-import type { Request } from "./types"
+import type { AuthConfig, Request } from "./types"
+import { comboMatches, resolveShortcuts } from "./lib/shortcuts"
+import { applyAccent, applyEditorFont } from "./lib/appearance"
+import { useVariableScopes } from "./lib/variables"
 
 function App() {
   const {
@@ -40,13 +47,27 @@ function App() {
     setResponsePanelHeight,
     sendingTabId,
     sendActiveRequest,
+    cancelActiveRequest,
     toggleSidebar,
     refreshCollections,
     refreshHistory,
+    collections,
+    folders,
+    history,
+    closedTabs,
+    focusUrlSignal,
+    requestUrlFocus,
+    restoreLastClosedTab,
+    copyActiveRequestCurl,
+    activeEnvironmentId,
   } = useWorkspaceStore()
 
   const [searchOpen, setSearchOpen] = useState(false)
   const [runnerOpen, setRunnerOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [curlOpen, setCurlOpen] = useState(false)
+  const [codeOpen, setCodeOpen] = useState(false)
+  const [aiOpen, setAiOpen] = useState(false)
   const [toast, setToast] = useState<{ kind: "info" | "error"; text: string } | null>(null)
   const [pendingClose, setPendingClose] = useState<{
     ids: string[]
@@ -55,10 +76,43 @@ function App() {
     label: string
   } | null>(null)
 
+  const variableScopes = useVariableScopes()
   const activeTab = tabs.find((t) => t.id === activeTabId)
   const activeRequest = activeTab?.request
   const activeResponse = activeTab?.response
   const isLoading = sendingTabId === activeTab?.id
+
+  // Resolve the auth a tab will inherit from its folder chain or collection so
+  // the Auth tab can describe it before the request is sent.
+  const inheritedAuth = useMemo((): { auth: AuthConfig | undefined; source: string } => {
+    if (!activeRequest) return { auth: undefined, source: "" }
+    const auth = activeRequest.auth
+    if (auth && auth.type && auth.type !== "inherit") return { auth: undefined, source: "" }
+    const accept = (candidate?: AuthConfig | null, source = ""): { auth: AuthConfig | undefined; source: string } | null => {
+      if (!candidate) return null
+      const type = (candidate.type || "").toLowerCase()
+      if (!type || type === "inherit") return null
+      return { auth: candidate, source }
+    }
+    if (activeRequest.folderId) {
+      const seen = new Set<string>()
+      let folderId: string | undefined = activeRequest.folderId
+      while (folderId && !seen.has(folderId)) {
+        seen.add(folderId)
+        const folder = folders.find((f) => f.id === folderId)
+        if (!folder) break
+        const found = accept(folder.auth, `folder “${folder.name}”`)
+        if (found) return found
+        folderId = folder.parentId
+      }
+    }
+    const collection = collections.find((c) => c.id === activeRequest.collectionId)
+    if (collection) {
+      const found = accept(collection.auth, `collection “${collection.info.name}”`)
+      if (found) return found
+    }
+    return { auth: undefined, source: "" }
+  }, [activeRequest, folders, collections])
 
   useEffect(() => {
     initialize()
@@ -84,7 +138,7 @@ function App() {
     return () => clearTimeout(timer)
   }, [toast])
 
-  // Theme
+  // Theme, accent colour, editor font and compact density.
   useEffect(() => {
     const root = document.documentElement
     const media = window.matchMedia?.("(prefers-color-scheme: dark)")
@@ -98,6 +152,14 @@ function App() {
       return () => media.removeEventListener?.("change", apply)
     }
   }, [settings.theme])
+
+  useEffect(() => {
+    const root = document.documentElement
+    applyAccent(root, settings.accentColor || "orange")
+    applyEditorFont(root, settings.editorFontFamily || "mono")
+    root.classList.toggle("pw-compact", !!settings.compactMode)
+    if (settings.fontSize) root.style.fontSize = `${settings.fontSize}px`
+  }, [settings.accentColor, settings.editorFontFamily, settings.compactMode, settings.fontSize])
 
   const handleNewTab = useCallback(() => {
     newTab(newRequestDraft())
@@ -137,7 +199,7 @@ function App() {
       requestCloseTabs(
         useWorkspaceStore
           .getState()
-          .tabs.filter((tab) => tab.id !== id)
+          .tabs.filter((tab) => tab.id !== id && !tab.pinned)
           .map((tab) => tab.id),
         "the other tabs",
       )
@@ -160,7 +222,10 @@ function App() {
 
   const handleCloseAllTabs = useCallback(() => {
     requestCloseTabs(
-      useWorkspaceStore.getState().tabs.map((tab) => tab.id),
+      useWorkspaceStore
+        .getState()
+        .tabs.filter((tab) => !tab.pinned)
+        .map((tab) => tab.id),
       "all tabs",
     )
   }, [requestCloseTabs])
@@ -229,35 +294,70 @@ function App() {
     }
   }, [])
 
-  // Global keyboard shortcuts
+  const handleImportUrl = useCallback(async () => {
+    const url = window.prompt?.("OpenAPI / Swagger document URL")
+    if (!url?.trim()) return
+    try {
+      const result = await useWorkspaceStore.getState().importFromURL(url.trim())
+      if (result) setToast({ kind: "info", text: result.message || `Imported ${result.format}` })
+    } catch (err) {
+      setToast({ kind: "error", text: api.errorMessage(err) })
+    }
+  }, [])
+
+  // Global keyboard shortcuts, driven by the shared registry so the Settings
+  // panel and the in-app help always agree.
   useEffect(() => {
+    const resolved = resolveShortcuts(settings.keyboardShortcuts || {})
+    const cycleTab = (delta: number) => {
+      const state = useWorkspaceStore.getState()
+      if (state.tabs.length === 0) return
+      const index = state.tabs.findIndex((t) => t.id === state.activeTabId)
+      const next = state.tabs[(index + delta + state.tabs.length) % state.tabs.length]
+      if (next) state.setActiveTab(next.id)
+    }
     const onKeyDown = (e: KeyboardEvent) => {
-      const mod = e.ctrlKey || e.metaKey
-      if (!mod) return
-      const key = e.key.toLowerCase()
-      if (key === "k") {
-        e.preventDefault()
-        setSearchOpen(true)
-      } else if (key === "t") {
-        e.preventDefault()
-        handleNewTab()
-      } else if (key === "b") {
-        e.preventDefault()
-        toggleSidebar()
-      } else if (key === "s") {
-        e.preventDefault()
-        handleSave()
-      } else if (key === "w") {
-        e.preventDefault()
-        if (activeTabId) handleCloseTab(activeTabId)
-      } else if (e.key === "Enter") {
-        e.preventDefault()
-        sendActiveRequest()
+      const run = (id: string, fn: () => void) => {
+        if (comboMatches(e, resolved[id] ?? "")) {
+          e.preventDefault()
+          e.stopPropagation()
+          fn()
+        }
       }
+      run("palette", () => setSearchOpen(true))
+      run("shortcuts", () => setShortcutsOpen(true))
+      run("newRequest", handleNewTab)
+      run("newTab", handleNewTab)
+      run("save", handleSave)
+      run("send", sendActiveRequest)
+      run("focusUrl", requestUrlFocus)
+      run("copyRequest", () => void copyActiveRequestCurl())
+      run("codeExport", () => setCodeOpen(true))
+      run("importCurl", () => setCurlOpen(true))
+      run("toggleSidebar", toggleSidebar)
+      run("nextTab", () => cycleTab(1))
+      run("prevTab", () => cycleTab(-1))
+      run("restoreTab", () => restoreLastClosedTab())
+      run("closeTab", () => {
+        const state = useWorkspaceStore.getState()
+        if (state.activeTabId) handleCloseTab(state.activeTabId)
+      })
+      run("closeAllTabs", handleCloseAllTabs)
     }
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [handleNewTab, toggleSidebar, handleSave, activeTabId, handleCloseTab, sendActiveRequest])
+  }, [
+    settings.keyboardShortcuts,
+    handleNewTab,
+    toggleSidebar,
+    handleSave,
+    handleCloseTab,
+    handleCloseAllTabs,
+    sendActiveRequest,
+    requestUrlFocus,
+    copyActiveRequestCurl,
+    restoreLastClosedTab,
+  ])
 
   if (!ready) {
     return (
@@ -289,6 +389,10 @@ function App() {
           onSearch={() => setSearchOpen(true)}
           onOpenRunner={() => setRunnerOpen(true)}
           onImport={handleImport}
+          onImportUrl={handleImportUrl}
+          onImportCurl={() => setCurlOpen(true)}
+          onOpenShortcuts={() => setShortcutsOpen(true)}
+          onOpenAI={() => setAiOpen(true)}
         />
 
         <RequestTabs
@@ -302,6 +406,13 @@ function App() {
           onTabCloseToRight={handleCloseTabsToRight}
           onTabCloseAll={handleCloseAllTabs}
           onTabDuplicate={duplicateTab}
+          onTabPin={(id) => useWorkspaceStore.getState().togglePinTab(id)}
+          onTabCopyUrl={async (id) => {
+            const tab = useWorkspaceStore.getState().tabs.find((item) => item.id === id)
+            if (tab?.request?.url) await api.copyToClipboard(tab.request.url)
+          }}
+          onTabRestore={() => restoreLastClosedTab()}
+          restoreCount={closedTabs.length}
           preferences={tabPreferences}
         />
 
@@ -313,9 +424,15 @@ function App() {
                   request={activeRequest || null}
                   onSend={sendActiveRequest}
                   onSave={handleSave}
-                  onCancel={() => {}}
+                  onCancel={cancelActiveRequest}
                   isLoading={isLoading}
                   onChange={(changes) => activeTabId && updateTabRequest(activeTabId, changes)}
+                  environmentId={activeEnvironmentId}
+                  inheritedAuth={inheritedAuth.auth}
+                  inheritedAuthSource={inheritedAuth.source}
+                  variableScopes={variableScopes}
+                  focusUrlSignal={focusUrlSignal}
+                  onOpenCodeExport={() => setCodeOpen(true)}
                 />
               </div>
 
@@ -342,6 +459,9 @@ function App() {
                 <ResponseViewer
                   response={activeResponse || null}
                   requestHeaders={activeRequest?.headers}
+                  request={activeRequest || null}
+                  environmentId={activeEnvironmentId}
+                  history={history}
                   height={responsePanelHeight}
                   onHeightChange={setResponsePanelHeight}
                 />
@@ -362,8 +482,27 @@ function App() {
         </div>
       </div>
 
-      <SearchPalette open={searchOpen} onOpenChange={setSearchOpen} />
+      <CommandPalette
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        onNewRequest={handleNewTab}
+        onImport={handleImport}
+        onImportCurl={() => setCurlOpen(true)}
+        onOpenRunner={() => setRunnerOpen(true)}
+        onOpenShortcuts={() => setShortcutsOpen(true)}
+        onOpenAI={() => setAiOpen(true)}
+      />
       <RunnerDialog open={runnerOpen} onOpenChange={setRunnerOpen} />
+      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+      <CodeExportDialog open={codeOpen} onOpenChange={setCodeOpen} request={activeRequest || null} />
+      <ImportCurlDialog
+        open={curlOpen}
+        onOpenChange={setCurlOpen}
+        onOpen={(draft) => {
+          newTab({ ...draft, id: "", collectionId: "" }, draft.name || "Imported cURL")
+        }}
+      />
+      <AIAssistant open={aiOpen} onOpenChange={setAiOpen} request={activeRequest || null} response={activeResponse || null} />
 
       <Dialog open={pendingClose !== null} onOpenChange={(open) => !open && setPendingClose(null)}>
         <DialogContent className="max-w-md">

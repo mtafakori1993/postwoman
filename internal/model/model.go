@@ -110,6 +110,16 @@ type OAuth2Auth struct {
 	RedirectURL  string `json:"redirectUrl"`
 	Username     string `json:"username,omitempty"`
 	Password     string `json:"password,omitempty"`
+	// ExpiresAt is the unix-millisecond expiry of AccessToken (0 = unknown).
+	ExpiresAt int64  `json:"expiresAt,omitempty"`
+	TokenType string `json:"tokenType,omitempty"`
+	// PKCE enables the Proof Key for Code Exchange extension for the
+	// authorisation-code flow.
+	PKCE bool `json:"pkce,omitempty"`
+	// CodeVerifier holds the transient PKCE verifier between the authorization
+	// request and the token exchange.
+	CodeVerifier string `json:"codeVerifier,omitempty"`
+	State        string `json:"state,omitempty"`
 }
 
 type AWSV4Auth struct {
@@ -525,4 +535,58 @@ type WSMessage struct {
 	Data      string `json:"data"`
 	IsBinary  bool   `json:"isBinary"`
 	Timestamp int64  `json:"timestamp"`
+}
+
+// StoredCookie associates a cookie with the URL/origin it belongs to. Go's
+// cookiejar can only enumerate cookies per URL, so remembering the origins we
+// have talked to is what makes the cookie manager possible.
+type StoredCookie struct {
+	URL    string `json:"url"`
+	Cookie Cookie `json:"cookie"`
+}
+
+// ExtractionResult is the outcome of a JSONPath extraction from a response
+// body.
+type ExtractionResult struct {
+	Path    string `json:"path"`
+	Type    string `json:"type"`
+	Value   string `json:"value"`   // JSON encoding of the extracted value
+	Display string `json:"display"` // human-readable form
+}
+
+// JSONDiffEntry describes one structural difference between two JSON values.
+type JSONDiffEntry struct {
+	Path      string `json:"path"`
+	Kind      string `json:"kind"` // added | removed | changed
+	Left      string `json:"left,omitempty"`
+	Right     string `json:"right,omitempty"`
+	LeftType  string `json:"leftType,omitempty"`
+	RightType string `json:"rightType,omitempty"`
+}
+
+// JSONDiff is the result of comparing two JSON documents.
+type JSONDiff struct {
+	Equal     bool            `json:"equal"`
+	Added     int             `json:"added"`
+	Removed   int             `json:"removed"`
+	Changed   int             `json:"changed"`
+	Truncated bool            `json:"truncated"`
+	Entries   []JSONDiffEntry `json:"entries"`
+}
+
+// AIRequest is the payload for the optional AI assistant. The UI only sends
+// request/response data after the user explicitly triggers a prompt.
+type AIRequest struct {
+	Prompt       string `json:"prompt"`
+	RequestJSON  string `json:"requestJson,omitempty"`
+	ResponseBody string `json:"responseBody,omitempty"`
+	SystemPrompt string `json:"systemPrompt,omitempty"`
+}
+
+// OAuth2StartResult is returned when the authorization URL has been built. The
+// Auth value carries the transient PKCE verifier/state that must be kept on the
+// request until the code is exchanged.
+type OAuth2StartResult struct {
+	Auth *OAuth2Auth `json:"auth"`
+	URL  string      `json:"url"`
 }

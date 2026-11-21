@@ -5,9 +5,13 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,6 +22,8 @@ import (
 	"Postwoman/internal/collections"
 	"Postwoman/internal/database"
 	"Postwoman/internal/httpclient"
+	"Postwoman/internal/importexport"
+	"Postwoman/internal/jsonutil"
 	"Postwoman/internal/mockserver"
 	"Postwoman/internal/model"
 	"Postwoman/internal/scripting"
@@ -25,7 +31,7 @@ import (
 	"Postwoman/internal/websocket"
 )
 
-const appVersion = "1.1.2"
+const appVersion = "1.3.0"
 
 // App is the Wails-bound backend. Every exported method is callable from the
 // React frontend through the generated bindings in frontend/wailsjs/go/main.
@@ -40,6 +46,9 @@ type App struct {
 	mockManager   *mockserver.Manager
 	workspaceID   string
 	wailsReady    bool
+
+	cancelMu sync.Mutex
+	cancels  map[string]context.CancelFunc
 }
 
 // emit forwards an event to the frontend, but only when running inside the
@@ -53,12 +62,17 @@ func (a *App) emit(eventName string, data ...interface{}) {
 }
 
 func NewApp() *App {
-	return &App{}
+	return &App{cancels: map[string]context.CancelFunc{}}
 }
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.Kitchen})
+	a.cancelMu.Lock()
+	if a.cancels == nil {
+		a.cancels = map[string]context.CancelFunc{}
+	}
+	a.cancelMu.Unlock()
 
 	dbPath := database.GetDBPath()
 	log.Info().Str("path", dbPath).Msg("initializing database")
@@ -83,6 +97,7 @@ func (a *App) startup(ctx context.Context) {
 		})
 	})
 	a.mockManager = mockserver.NewManager()
+	a.restoreCookies()
 
 	ws, err := a.repo.EnsureDefaultWorkspace(ctx)
 	if err != nil {
@@ -201,7 +216,57 @@ func (a *App) Bootstrap() (*model.AppState, error) {
 // SendRequest executes a request and runs pre-request/test scripts when
 // requested. Network failures are returned inside the response object.
 func (a *App) SendRequest(request model.Request, environment, globals, collectionVars map[string]string, runScripts bool, environmentID string) (*model.Response, error) {
+	return a.sendRequestCore(a.ctx, request, environment, globals, collectionVars, runScripts, environmentID)
+}
+
+// SendRequestWithID is the cancellable variant used by the editor. The UI
+// generates the id and can call CancelRequest to abort the in-flight request.
+func (a *App) SendRequestWithID(requestID string, request model.Request, environmentID string) (*model.Response, error) {
 	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	child, cancel := context.WithCancel(ctx)
+	if requestID != "" {
+		a.trackCancel(requestID, cancel)
+		defer a.untrackCancel(requestID)
+	}
+	defer cancel()
+	return a.sendRequestCore(child, request, nil, nil, nil, true, environmentID)
+}
+
+// CancelRequest aborts an in-flight request created by SendRequestWithID.
+func (a *App) CancelRequest(requestID string) {
+	a.cancelMu.Lock()
+	cancel := a.cancels[requestID]
+	a.cancelMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
+func (a *App) trackCancel(id string, cancel context.CancelFunc) {
+	a.cancelMu.Lock()
+	if a.cancels == nil {
+		a.cancels = map[string]context.CancelFunc{}
+	}
+	if existing, ok := a.cancels[id]; ok {
+		existing()
+	}
+	a.cancels[id] = cancel
+	a.cancelMu.Unlock()
+}
+
+func (a *App) untrackCancel(id string) {
+	a.cancelMu.Lock()
+	delete(a.cancels, id)
+	a.cancelMu.Unlock()
+}
+
+func (a *App) sendRequestCore(ctx context.Context, request model.Request, environment, globals, collectionVars map[string]string, runScripts bool, environmentID string) (*model.Response, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	settings := a.repo.GetSettingsModel(ctx)
 
 	env := copyMap(environment)
@@ -271,6 +336,9 @@ func (a *App) SendRequest(request model.Request, environment, globals, collectio
 			request.Headers = append(request.Headers, model.KeyValue{Key: "Cache-Control", Value: "no-cache", Enabled: true})
 		}
 	}
+
+	// Resolve collection/folder auth inheritance before anything executes.
+	request.Auth = a.effectiveAuth(ctx, &request)
 
 	runScripts = runScripts && settings.ScriptExecutionEnabled
 	response := &model.Response{Tests: []model.TestResult{}, Console: []model.ConsoleEntry{}}
@@ -354,7 +422,97 @@ func (a *App) SendRequest(request model.Request, environment, globals, collectio
 	if settings.HistoryRetentionDays > 0 {
 		_ = a.repo.TrimHistory(ctx, 5000)
 	}
+	a.persistCookies()
 	return result, nil
+}
+
+// effectiveAuth resolves request → folder → collection auth inheritance. A
+// request can opt out with type "noauth" (or any explicit mechanism).
+func (a *App) effectiveAuth(ctx context.Context, request *model.Request) model.Auth {
+	explicit := strings.ToLower(strings.TrimSpace(request.Auth.Type))
+	if explicit != "" && explicit != "inherit" {
+		return request.Auth
+	}
+	// Walk the folder chain from the request's folder up to the root. The
+	// nearest explicit mechanism wins.
+	seen := map[string]bool{}
+	if request.FolderID != nil && *request.FolderID != "" {
+		folderID := *request.FolderID
+		for folderID != "" && !seen[folderID] {
+			seen[folderID] = true
+			folder, err := a.repo.GetFolder(ctx, folderID)
+			if err != nil || folder == nil {
+				break
+			}
+			if auth := folder.Auth; auth != nil {
+				t := strings.ToLower(strings.TrimSpace(auth.Type))
+				if t != "" && t != "inherit" {
+					return *auth
+				}
+			}
+			if folder.ParentID == nil {
+				break
+			}
+			folderID = *folder.ParentID
+		}
+	}
+	if request.CollectionID != "" {
+		if collection, err := a.repo.GetCollection(ctx, request.CollectionID); err == nil && collection != nil {
+			t := strings.ToLower(strings.TrimSpace(collection.Auth.Type))
+			if t != "" && t != "inherit" {
+				return collection.Auth
+			}
+		}
+	}
+	return model.Auth{Type: "noauth"}
+}
+
+// scopesFor loads the variable scopes used by a request. Passing empty maps is
+// the normal path from the editor; the backend fills them from SQLite.
+type variableScopes struct {
+	local       map[string]string
+	environment map[string]string
+	collection  map[string]string
+	globals     map[string]string
+}
+
+func (s variableScopes) resolver() *variables.Resolver {
+	return variables.New(s.local, s.environment, s.collection, s.globals)
+}
+
+func (a *App) scopesFor(ctx context.Context, request *model.Request, environmentID string) variableScopes {
+	scopes := variableScopes{
+		local:       map[string]string{},
+		environment: map[string]string{},
+		collection:  map[string]string{},
+		globals:     map[string]string{},
+	}
+	if environmentID != "" {
+		if stored, err := a.repo.GetEnvironment(ctx, environmentID); err == nil && stored != nil {
+			for _, v := range stored.Values {
+				if v.Enabled {
+					scopes.environment[v.Key] = v.Value
+				}
+			}
+		}
+	}
+	if request != nil && request.CollectionID != "" {
+		if coll, err := a.repo.GetCollection(ctx, request.CollectionID); err == nil && coll != nil {
+			for _, v := range coll.Variables {
+				if v.Enabled {
+					scopes.collection[v.Key] = v.Value
+				}
+			}
+		}
+	}
+	if gvars, err := a.repo.ListGlobalVariables(ctx); err == nil {
+		for _, v := range gvars {
+			if v.Enabled {
+				scopes.globals[v.Key] = v.Value
+			}
+		}
+	}
+	return scopes
 }
 
 // SendRequestStructured is a convenience wrapper for clients that prefer a
@@ -444,7 +602,11 @@ func (a *App) UpdateCollection(collection model.Collection) error {
 	if collection.Auth.Type == "" {
 		collection.Auth.Type = "noauth"
 	}
-	return a.repo.UpdateCollection(a.ctx, &collection)
+	if err := a.repo.UpdateCollection(a.ctx, &collection); err != nil {
+		return err
+	}
+	a.emit("collections:updated", nil)
+	return nil
 }
 
 func (a *App) DeleteCollection(id string) error {
@@ -887,6 +1049,7 @@ func (a *App) RunCollection(opts model.RunOptions) (*model.RunResult, error) {
 		}
 		for _, request := range requests {
 			requestCount++
+			request.Auth = a.effectiveAuth(ctx, &request)
 			started := time.Now()
 			run := model.RequestResult{RequestID: request.ID, RequestName: request.Name, Status: "passed", Tests: []model.TestResult{}}
 			local := map[string]string{}
@@ -1042,10 +1205,12 @@ func (a *App) WSDisconnect(connectionID string) error {
 }
 
 func (a *App) WSGet(connectionID string) (*model.WSConnection, error) {
-	msgs := a.wsManager.Messages(connectionID)
-	return &model.WSConnection{
-		ID: connectionID, Connected: true, Messages: msgs,
-	}, nil
+	for _, conn := range a.wsManager.List() {
+		if conn.ID == connectionID {
+			return &conn, nil
+		}
+	}
+	return &model.WSConnection{ID: connectionID, Connected: false, Messages: a.wsManager.Messages(connectionID)}, nil
 }
 
 func (a *App) WSList() []model.WSConnection {
@@ -1239,4 +1404,410 @@ func safeFilename(name string) string {
 		name = name[:80]
 	}
 	return name
+}
+
+// ---------------------------------------------------------------------------
+// Cookies
+// ---------------------------------------------------------------------------
+
+// ListCookies returns cookies captured by the shared jar, grouped by origin.
+func (a *App) ListCookies() ([]model.StoredCookie, error) {
+	if a.httpClient == nil {
+		return []model.StoredCookie{}, nil
+	}
+	return a.httpClient.ListCookies(), nil
+}
+
+// SaveCookie creates or replaces a cookie for an origin.
+func (a *App) SaveCookie(input model.StoredCookie) error {
+	if a.httpClient == nil {
+		return fmt.Errorf("HTTP client is not initialised")
+	}
+	if err := a.httpClient.SetCookie(input.URL, input.Cookie); err != nil {
+		return err
+	}
+	a.persistCookies()
+	return nil
+}
+
+// DeleteCookie removes a cookie by name for an origin.
+func (a *App) DeleteCookie(rawURL, name string) error {
+	if a.httpClient == nil {
+		return fmt.Errorf("HTTP client is not initialised")
+	}
+	if err := a.httpClient.DeleteCookie(rawURL, name); err != nil {
+		return err
+	}
+	a.persistCookies()
+	return nil
+}
+
+// ClearCookies wipes the jar and the persisted cookie snapshot.
+func (a *App) ClearCookies() error {
+	if a.httpClient == nil {
+		return nil
+	}
+	if err := a.httpClient.ClearCookies(); err != nil {
+		return err
+	}
+	a.persistCookies()
+	return nil
+}
+
+func (a *App) persistCookies() {
+	if a.httpClient == nil || a.repo == nil || a.ctx == nil {
+		return
+	}
+	if err := a.repo.SetSetting(a.ctx, "cookies", a.httpClient.ListCookies()); err != nil {
+		log.Warn().Err(err).Msg("failed to persist cookies")
+	}
+}
+
+func (a *App) restoreCookies() {
+	if a.httpClient == nil || a.repo == nil || a.ctx == nil {
+		return
+	}
+	var stored []model.StoredCookie
+	if err := a.repo.GetSetting(a.ctx, "cookies", &stored); err != nil {
+		return
+	}
+	if len(stored) > 0 {
+		a.httpClient.RestoreCookies(stored)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Code generation and cURL import
+// ---------------------------------------------------------------------------
+
+// ExportRequestCode renders the request (with inherited auth applied) as code
+// for cURL, raw HTTP, fetch, Node.js, Python, Go or PHP.
+func (a *App) ExportRequestCode(request model.Request, target string) (string, error) {
+	request.Auth = a.effectiveAuth(a.ctx, &request)
+	return importexport.ExportAsCode(&request, target)
+}
+
+// ParseCurl converts a cURL command into an editable request draft.
+func (a *App) ParseCurl(command string) (*model.Request, error) {
+	return importexport.ParseCurlAsRequest(command)
+}
+
+// ---------------------------------------------------------------------------
+// JSON response tooling
+// ---------------------------------------------------------------------------
+
+func (a *App) ExtractJSONPath(body, path string) (*model.ExtractionResult, error) {
+	return jsonutil.Extract(body, path)
+}
+
+func (a *App) CompareJSON(left, right string) (*model.JSONDiff, error) {
+	return jsonutil.Diff(left, right)
+}
+
+func (a *App) GenerateJSONSchema(body string) (string, error) {
+	value, err := jsonutil.Decode(body)
+	if err != nil {
+		return "", fmt.Errorf("response is not valid JSON: %w", err)
+	}
+	return jsonutil.MarshalSchema(jsonutil.InferSchema(value))
+}
+
+func (a *App) ValidateJSONSchema(body, schema string) ([]string, error) {
+	return jsonutil.Validate(body, schema)
+}
+
+// ---------------------------------------------------------------------------
+// OAuth 2.0 interactive flows
+// ---------------------------------------------------------------------------
+
+func oauth2FromRequest(request model.Request) (*model.OAuth2Auth, error) {
+	if request.Auth.OAuth2 == nil {
+		return nil, fmt.Errorf("the request does not use OAuth 2.0 authentication")
+	}
+	copy := *request.Auth.OAuth2
+	return &copy, nil
+}
+
+// OAuth2Start builds the authorization URL (with PKCE when enabled) and returns
+// the transient auth state the UI must keep on the request.
+func (a *App) OAuth2Start(request model.Request, environmentID string) (*model.OAuth2StartResult, error) {
+	original, err := oauth2FromRequest(request)
+	if err != nil {
+		return nil, err
+	}
+	scopes := a.scopesFor(a.ctx, &request, environmentID)
+	resolved := httpclient.ResolveOAuth2(*original, scopes.resolver())
+	started, authURL, err := a.httpClient.StartOAuth2(resolved)
+	if err != nil {
+		return nil, err
+	}
+	original.PKCE = started.PKCE
+	original.CodeVerifier = started.CodeVerifier
+	original.State = started.State
+	return &model.OAuth2StartResult{Auth: original, URL: authURL}, nil
+}
+
+// OAuth2Exchange exchanges an authorization code (or the pasted redirect URL)
+// for tokens.
+func (a *App) OAuth2Exchange(request model.Request, environmentID, code string) (*model.OAuth2Auth, error) {
+	original, err := oauth2FromRequest(request)
+	if err != nil {
+		return nil, err
+	}
+	scopes := a.scopesFor(a.ctx, &request, environmentID)
+	resolved := httpclient.ResolveOAuth2(*original, scopes.resolver())
+	updated, err := a.httpClient.ExchangeOAuth2Code(a.ctx, resolved, code)
+	if err != nil {
+		return nil, err
+	}
+	original.AccessToken = updated.AccessToken
+	if updated.RefreshToken != "" {
+		original.RefreshToken = updated.RefreshToken
+	}
+	original.TokenType = updated.TokenType
+	original.ExpiresAt = updated.ExpiresAt
+	original.CodeVerifier = ""
+	original.State = ""
+	return original, nil
+}
+
+// OAuth2FetchToken acquires a token for the non-interactive grants.
+func (a *App) OAuth2FetchToken(request model.Request, environmentID string) (*model.OAuth2Auth, error) {
+	original, err := oauth2FromRequest(request)
+	if err != nil {
+		return nil, err
+	}
+	scopes := a.scopesFor(a.ctx, &request, environmentID)
+	resolved := httpclient.ResolveOAuth2(*original, scopes.resolver())
+	updated, err := a.httpClient.FetchOAuth2Token(a.ctx, resolved)
+	if err != nil {
+		return nil, err
+	}
+	original.AccessToken = updated.AccessToken
+	if updated.RefreshToken != "" {
+		original.RefreshToken = updated.RefreshToken
+	}
+	original.TokenType = updated.TokenType
+	original.ExpiresAt = updated.ExpiresAt
+	return original, nil
+}
+
+// ---------------------------------------------------------------------------
+// GraphQL
+// ---------------------------------------------------------------------------
+
+const graphqlIntrospectionQuery = `query IntrospectionQuery {
+  __schema {
+    queryType { name }
+    mutationType { name }
+    subscriptionType { name }
+    types {
+      kind
+      name
+      description
+      fields(includeDeprecated: false) {
+        name
+        description
+        args { name description type { kind name ofType { kind name ofType { kind name } } } }
+        type { kind name ofType { kind name ofType { kind name } } }
+      }
+      inputFields { name description type { kind name ofType { kind name ofType { kind name } } } }
+      enumValues { name description }
+    }
+  }
+}`
+
+// GraphQLIntrospect executes the introspection query for a request without
+// recording history, returning the raw JSON schema document.
+func (a *App) GraphQLIntrospect(request model.Request, environmentID string) (string, error) {
+	scopes := a.scopesFor(a.ctx, &request, environmentID)
+	request.Auth = a.effectiveAuth(a.ctx, &request)
+	if request.Settings.Timeout <= 0 {
+		request.Settings.Timeout = a.repo.GetSettingsModel(a.ctx).RequestTimeout
+	}
+	if request.Settings.Timeout <= 0 {
+		request.Settings.Timeout = 30000
+	}
+	request.Settings.MaxRedirects = 10
+	request.Body = model.Body{Mode: "graphql", GraphQL: &model.GraphQLBody{
+		Query:     graphqlIntrospectionQuery,
+		Variables: "{}",
+	}}
+	ctx, cancel := context.WithTimeout(a.ctx, time.Duration(request.Settings.Timeout)*time.Millisecond)
+	defer cancel()
+	resp, err := a.httpClient.Do(ctx, &request, scopes.resolver())
+	if err != nil {
+		return "", err
+	}
+	if resp.Error != "" {
+		return "", fmt.Errorf("%s", resp.Error)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("introspection failed with HTTP %d %s", resp.StatusCode, resp.StatusText)
+	}
+	return resp.Body, nil
+}
+
+// ---------------------------------------------------------------------------
+// Optional AI assistant
+// ---------------------------------------------------------------------------
+
+// AIAssist performs a chat-completions request against the user-configured
+// OpenAI-compatible endpoint. It is disabled until the user opts in and
+// provides a provider + API key; request/response data is only sent when the
+// UI explicitly calls this method.
+func (a *App) AIAssist(input model.AIRequest) (string, error) {
+	settings := a.repo.GetSettingsModel(a.ctx)
+	if !settings.AIEnabled {
+		return "", fmt.Errorf("the AI assistant is disabled; enable it in Settings")
+	}
+	if strings.TrimSpace(settings.AIAPIKey) == "" {
+		return "", fmt.Errorf("no AI API key configured; add one in Settings")
+	}
+	if strings.TrimSpace(settings.AIBaseURL) == "" {
+		return "", fmt.Errorf("no AI endpoint configured; add one in Settings")
+	}
+	base := strings.TrimRight(settings.AIBaseURL, "/")
+	endpoint := base
+	if !strings.HasSuffix(base, "/chat/completions") {
+		endpoint = base + "/chat/completions"
+	}
+
+	system := strings.TrimSpace(input.SystemPrompt)
+	if system == "" {
+		system = "You are an expert API engineer embedded in the Postwoman API client. Be concise, concrete and technically accurate. Use fenced code blocks where useful."
+	}
+	userParts := []string{}
+	if p := strings.TrimSpace(input.Prompt); p != "" {
+		userParts = append(userParts, p)
+	}
+	if r := strings.TrimSpace(input.RequestJSON); r != "" {
+		userParts = append(userParts, "Request configuration:\n```json\n"+r+"\n```")
+	}
+	if b := strings.TrimSpace(input.ResponseBody); b != "" {
+		const max = 24000
+		if len(b) > max {
+			b = b[:max] + "\n…(response truncated for the assistant)"
+		}
+		userParts = append(userParts, "Response body:\n```\n"+b+"\n```")
+	}
+	if len(userParts) == 0 {
+		return "", fmt.Errorf("a prompt or request/response context is required")
+	}
+
+	payload := map[string]any{
+		"model": settings.AIModel,
+		"messages": []map[string]string{
+			{"role": "system", "content": system},
+			{"role": "user", "content": strings.Join(userParts, "\n\n")},
+		},
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 90*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(encoded)))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+settings.AIAPIKey)
+	resp, err := (&http.Client{Timeout: 90 * time.Second}).Do(req)
+	if err != nil {
+		return "", fmt.Errorf("AI request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("AI endpoint returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var parsed struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return "", fmt.Errorf("AI endpoint returned an unexpected response: %w", err)
+	}
+	if parsed.Error != nil && parsed.Error.Message != "" {
+		return "", fmt.Errorf("AI provider error: %s", parsed.Error.Message)
+	}
+	if len(parsed.Choices) == 0 || strings.TrimSpace(parsed.Choices[0].Message.Content) == "" {
+		return "", fmt.Errorf("AI endpoint returned no content")
+	}
+	return parsed.Choices[0].Message.Content, nil
+}
+
+// ---------------------------------------------------------------------------
+// Import from URL
+// ---------------------------------------------------------------------------
+
+// ImportFromURL fetches an OpenAPI/Swagger/Postman document over HTTP and
+// imports it into the active workspace.
+func (a *App) ImportFromURL(workspaceID, sourceURL string) (*model.ImportSummary, error) {
+	sourceURL = strings.TrimSpace(sourceURL)
+	if sourceURL == "" {
+		return nil, fmt.Errorf("a document URL is required")
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sourceURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json, application/yaml, text/yaml, */*")
+	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("could not fetch %s: %w", sourceURL, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("could not fetch %s: HTTP %d", sourceURL, resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 20<<20))
+	if err != nil {
+		return nil, err
+	}
+	if workspaceID == "" {
+		workspaceID = a.workspaceID
+	}
+	summary, err := a.collectionMgr.Import(ctx, workspaceID, body, pathFilename(sourceURL))
+	if err != nil {
+		return nil, err
+	}
+	a.emit("collections:updated", nil)
+	return summary, nil
+}
+
+func pathFilename(raw string) string {
+	if parsed, err := url.Parse(raw); err == nil {
+		if name := parsed.Path; name != "" {
+			parts := strings.Split(name, "/")
+			if last := parts[len(parts)-1]; last != "" {
+				return last
+			}
+		}
+	}
+	return "import.json"
+}
+
+// ---------------------------------------------------------------------------
+// WebSocket helpers
+// ---------------------------------------------------------------------------
+
+func (a *App) WSPing(connectionID string) error {
+	return a.wsManager.Ping(connectionID)
+}
+
+func (a *App) WSClear(connectionID string) {
+	if a.wsManager != nil {
+		a.wsManager.Clear(connectionID)
+	}
 }

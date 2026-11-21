@@ -1,10 +1,11 @@
-import React from "react"
+import React, { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Copy, FileUp, FolderOpen, Plus, Trash2, X } from "lucide-react"
+import { Copy, FileUp, FolderOpen, NotebookPen, Plus, Trash2, X } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { VariableInput } from "./VariableInput"
 import { KeyValuePair } from "@/types"
 
 interface Column {
@@ -25,6 +26,8 @@ interface KeyValueEditorProps {
   footerExtra?: React.ReactNode
   onChooseFile?: (row: KeyValuePair, index: number) => void
   onAdd?: () => void
+  /** Offer `{{variable}}` autocompletion in text cells. */
+  variableAutocomplete?: boolean
 }
 
 function emptyRow(): KeyValuePair {
@@ -46,8 +49,11 @@ export function KeyValueEditor({
   footerExtra,
   onChooseFile,
   onAdd,
+  variableAutocomplete = false,
 }: KeyValueEditorProps) {
   const rows = items
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkText, setBulkText] = useState("")
 
   const commit = (next: KeyValuePair[]) => onChange(next)
 
@@ -140,12 +146,24 @@ export function KeyValueEditor({
                         onChange={(patch) => updateRow(index, patch)}
                       />
                     ) : (
-                      <Input
-                        value={(row[col.key as keyof KeyValuePair] as string) || ""}
-                        onChange={(e) => updateRow(index, { [col.key]: e.target.value })}
-                        placeholder={col.placeholder ?? col.header}
-                        className="h-8 text-sm bg-transparent border-0 focus-visible:ring-1"
-                      />
+                      variableAutocomplete ? (
+                        <VariableInput
+                          value={(row[col.key as keyof KeyValuePair] as string) || ""}
+                          onChange={(next) => updateRow(index, { [col.key]: next })}
+                          type={col.key === "value" && row.type === "secret" ? "password" : undefined}
+                          placeholder={col.placeholder ?? col.header}
+                          aria-label={col.header || col.key}
+                          className="h-8 text-sm bg-transparent border-0 focus-visible:ring-1"
+                        />
+                      ) : (
+                        <Input
+                          value={(row[col.key as keyof KeyValuePair] as string) || ""}
+                          onChange={(e) => updateRow(index, { [col.key]: e.target.value })}
+                          placeholder={col.placeholder ?? col.header}
+                          type={col.key === "value" && row.type === "secret" ? "password" : undefined}
+                          className="h-8 text-sm bg-transparent border-0 focus-visible:ring-1"
+                        />
+                      )
                     )}
                   </div>
                 ))}
@@ -178,10 +196,59 @@ export function KeyValueEditor({
         </div>
       </div>
 
+      {bulkOpen && (
+        <div className="space-y-2 border-t border-border bg-muted/20 p-2">
+          <textarea
+            value={bulkText}
+            onChange={(event) => setBulkText(event.target.value)}
+            spellCheck={false}
+            placeholder={"Paste one entry per line, for example:\ncontent-type: application/json\npage=2\n# lines starting with # are ignored"}
+            className="h-28 w-full resize-none rounded-md border border-border bg-background p-2 font-mono text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={() => {
+                const parsed: KeyValuePair[] = []
+                for (const rawLine of bulkText.split(/\r?\n/)) {
+                  const line = rawLine.trim()
+                  if (!line || line.startsWith("#")) continue
+                  const separator = line.includes(":") ? line.indexOf(":") : line.indexOf("=")
+                  if (separator === -1) {
+                    parsed.push({ key: line, value: "", description: "", enabled: true, type: "text" })
+                    continue
+                  }
+                  parsed.push({
+                    key: line.slice(0, separator).trim(),
+                    value: line.slice(separator + 1).trim(),
+                    description: "",
+                    enabled: true,
+                    type: "text",
+                  })
+                }
+                if (parsed.length > 0) commit([...rows, ...parsed])
+                setBulkText("")
+                setBulkOpen(false)
+              }}
+            >
+              Apply
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setBulkOpen(false)}>
+              Cancel
+            </Button>
+            <span className="text-[11px] text-muted-foreground">Use `key: value` or `key=value` per line.</span>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-2 px-2 py-2 border-t border-border bg-muted/20">
         <Button variant="outline" size="sm" className="gap-1.5" onClick={addRow}>
           <Plus className="h-3.5 w-3.5" />
           {addLabel}
+        </Button>
+        <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setBulkOpen((value) => !value)}>
+          <NotebookPen className="h-3.5 w-3.5" />
+          Bulk Edit
         </Button>
         {footerExtra}
       </div>

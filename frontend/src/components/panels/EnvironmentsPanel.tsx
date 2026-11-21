@@ -2,8 +2,9 @@ import React, { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { KeyValueEditor } from "@/components/KeyValueEditor"
-import { Plus, Trash2, Save, Download, Check } from "lucide-react"
+import { Check, Copy, Download, Plus, Save, Trash2, Upload } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useWorkspaceStore } from "@/stores/workspace"
 import * as api from "@/lib/api"
@@ -40,12 +41,17 @@ export function EnvironmentsPanel() {
     setActiveEnvironment,
     setGlobalVariable,
     deleteGlobalVariable,
+    collections,
+    updateCollectionMeta,
+    importFromFile,
   } = useWorkspaceStore()
 
   const [selectedId, setSelectedId] = useState<string | null>(activeEnvironmentId)
   const [draft, setDraft] = useState<Environment | null>(null)
   const [dirty, setDirty] = useState(false)
   const [globalRows, setGlobalRows] = useState<KeyValuePair[]>([])
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null)
+  const selectedCollection = collections.find((c) => c.id === selectedCollectionId) ?? collections[0] ?? null
 
   useEffect(() => {
     setGlobalRows(
@@ -87,6 +93,34 @@ export function EnvironmentsPanel() {
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex-1">Environments</span>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          title="Duplicate environment"
+          aria-label="Duplicate environment"
+          disabled={!draft}
+          onClick={async () => {
+            if (!draft) return
+            const created = await createEnvironment(`${draft.name} copy`)
+            if (created) {
+              await saveEnvironment({ ...created, values: draft.values })
+              setSelectedId(created.id)
+            }
+          }}
+        >
+          <Copy className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          title="Import environments / collections"
+          aria-label="Import"
+          onClick={() => void importFromFile().catch(console.error)}
+        >
+          <Upload className="h-4 w-4" />
+        </Button>
         <Button
           variant="ghost"
           size="icon"
@@ -192,16 +226,58 @@ export function EnvironmentsPanel() {
                 }}
                 columns={[
                   { key: "enabled", header: "", width: "40px", type: "checkbox" },
-                  { key: "key", header: "Variable", width: "30%" },
-                  { key: "value", header: "Value", width: "45%" },
-                  { key: "type", header: "Type", width: "20%" },
+                  { key: "key", header: "Variable", width: "28%" },
+                  { key: "value", header: "Value", width: "40%" },
+                  { key: "type", header: "Type (default / secret)", width: "24%" },
                 ]}
+                variableAutocomplete
               />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Set the type to <code>secret</code> to mask the value here and in variable suggestions.
+              </p>
             </div>
           </div>
         ) : (
           <div className="text-xs text-muted-foreground">Create an environment to store variables.</div>
         )}
+
+        <div className="border-t border-border pt-3">
+          <Label className="mb-1 block text-xs font-medium text-muted-foreground">Collection Variables</Label>
+          {collections.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground">No collections yet.</p>
+          ) : (
+            <div className="space-y-2">
+              <Select value={selectedCollection?.id ?? ""} onValueChange={setSelectedCollectionId}>
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="Select a collection" />
+                </SelectTrigger>
+                <SelectContent>
+                  {collections.map((collection) => (
+                    <SelectItem key={collection.id} value={collection.id}>
+                      {collection.info.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedCollection && (
+                <KeyValueEditor
+                  items={toKeyValues(selectedCollection.variables ?? [])}
+                  onChange={(rows) => {
+                    void updateCollectionMeta({ ...selectedCollection, variables: toVariables(rows) })
+                  }}
+                  variableAutocomplete
+                  columns={[
+                    { key: "enabled", header: "", width: "40px", type: "checkbox" },
+                    { key: "key", header: "Variable", width: "28%" },
+                    { key: "value", header: "Value", width: "40%" },
+                    { key: "type", header: "Type", width: "24%" },
+                  ]}
+                  emptyMessage="This collection has no variables."
+                />
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="pt-2 border-t border-border">
           <Label className="text-xs font-medium text-muted-foreground mb-1 block">Global Variables</Label>

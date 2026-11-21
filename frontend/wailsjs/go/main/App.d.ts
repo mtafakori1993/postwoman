@@ -147,5 +147,44 @@ export function WSGet(arg1:string):Promise<model.WSConnection>;
 export function WSList():Promise<Array<model.WSConnection>>;
 
 export function WSSend(arg1:string,arg2:string,arg3:boolean):Promise<void>;
+export function AIAssist(arg1:model.AIRequest):Promise<string>;
+
+export function CancelRequest(arg1:string):Promise<void>;
+
+export function ClearCookies():Promise<void>;
+
+export function CompareJSON(arg1:string,arg2:string):Promise<model.JSONDiff>;
+
+export function DeleteCookie(arg1:string,arg2:string):Promise<void>;
+
+export function ExportRequestCode(arg1:model.Request,arg2:string):Promise<string>;
+
+export function ExtractJSONPath(arg1:string,arg2:string):Promise<model.ExtractionResult>;
+
+export function GenerateJSONSchema(arg1:string):Promise<string>;
+
+export function GraphQLIntrospect(arg1:model.Request,arg2:string):Promise<string>;
+
+export function ImportFromURL(arg1:string,arg2:string):Promise<model.ImportSummary>;
+
+export function ListCookies():Promise<Array<model.StoredCookie>>;
+
+export function OAuth2Exchange(arg1:model.Request,arg2:string,arg3:string):Promise<model.OAuth2Auth>;
+
+export function OAuth2FetchToken(arg1:model.Request,arg2:string):Promise<model.OAuth2Auth>;
+
+export function OAuth2Start(arg1:model.Request,arg2:string):Promise<model.OAuth2StartResult>;
+
+export function ParseCurl(arg1:string):Promise<model.Request>;
+
+export function SaveCookie(arg1:model.StoredCookie):Promise<void>;
+
+export function SendRequestWithID(arg1:string,arg2:model.Request,arg3:string):Promise<model.Response>;
+
+export function ValidateJSONSchema(arg1:string,arg2:string):Promise<Array<string>>;
+
+export function WSClear(arg1:string):Promise<void>;
+
+export function WSPing(arg1:string):Promise<void>;
 
 export function WriteTextFile(arg1:string,arg2:string):Promise<void>;

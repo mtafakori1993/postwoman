@@ -26,6 +26,7 @@ export type Request = Plain<model.Request>
 export type RequestBody = Plain<model.Body>
 export type GraphQLBody = Plain<model.GraphQLBody>
 export type AuthConfig = Plain<model.Auth>
+export type OAuth2Config = Plain<model.OAuth2Auth>
 export type RequestSettings = Plain<model.Settings>
 export type RequestScript = Plain<model.Script>
 export type Environment = Plain<model.Environment>
@@ -37,7 +38,7 @@ export type TestResult = Plain<model.TestResult>
 export type ConsoleEntry = Plain<model.ConsoleEntry>
 export type RequestHistoryEntry = Plain<model.HistoryEntry>
 export type HistoryEntry = Plain<model.HistoryEntry>
-export type TabState = Plain<model.Tab>
+export type TabState = Plain<model.Tab> & { pinned?: boolean }
 export type AppSettings = Plain<model.AppSettings>
 export type MockServer = Plain<model.MockServer>
 export type MockRoute = Plain<model.MockRoute>
@@ -54,6 +55,16 @@ export type RequestResult = Plain<model.RequestResult>
 export type AppState = Plain<model.AppState>
 export type ProxyConfig = Plain<model.Proxy>
 export type TLSConfig = Plain<model.TLS>
+
+// --- advanced tooling (mirrors internal/model additions) -------------------
+
+export type StoredCookie = Plain<model.StoredCookie>
+export type ExtractionResult = Plain<model.ExtractionResult>
+export type JSONDiff = Plain<model.JSONDiff>
+export type JSONDiffEntry = Plain<model.JSONDiffEntry>
+export type AIRequest = Plain<model.AIRequest>
+export type OAuth2StartResult = Plain<model.OAuth2StartResult>
+export type CodeTarget = "curl" | "http" | "fetch" | "node" | "python" | "go" | "php"
 
 // --- aliases used throughout the UI ---------------------------------------
 
@@ -76,6 +87,7 @@ export type SidebarTab =
   | "history"
   | "mocks"
   | "websocket"
+  | "cookies"
   | "settings"
 
 export type ResponseViewMode = "pretty" | "raw" | "preview"

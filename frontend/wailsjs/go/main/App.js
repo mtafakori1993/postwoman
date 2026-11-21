@@ -297,3 +297,83 @@ export function WSSend(arg1, arg2, arg3) {
 export function WriteTextFile(arg1, arg2) {
   return window['go']['main']['App']['WriteTextFile'](arg1, arg2);
 }
+
+export function AIAssist(arg1) {
+  return window['go']['main']['App']['AIAssist'](arg1);
+}
+
+export function CancelRequest(arg1) {
+  return window['go']['main']['App']['CancelRequest'](arg1);
+}
+
+export function ClearCookies() {
+  return window['go']['main']['App']['ClearCookies']();
+}
+
+export function CompareJSON(arg1, arg2) {
+  return window['go']['main']['App']['CompareJSON'](arg1, arg2);
+}
+
+export function DeleteCookie(arg1, arg2) {
+  return window['go']['main']['App']['DeleteCookie'](arg1, arg2);
+}
+
+export function ExportRequestCode(arg1, arg2) {
+  return window['go']['main']['App']['ExportRequestCode'](arg1, arg2);
+}
+
+export function ExtractJSONPath(arg1, arg2) {
+  return window['go']['main']['App']['ExtractJSONPath'](arg1, arg2);
+}
+
+export function GenerateJSONSchema(arg1) {
+  return window['go']['main']['App']['GenerateJSONSchema'](arg1);
+}
+
+export function GraphQLIntrospect(arg1, arg2) {
+  return window['go']['main']['App']['GraphQLIntrospect'](arg1, arg2);
+}
+
+export function ImportFromURL(arg1, arg2) {
+  return window['go']['main']['App']['ImportFromURL'](arg1, arg2);
+}
+
+export function ListCookies() {
+  return window['go']['main']['App']['ListCookies']();
+}
+
+export function OAuth2Exchange(arg1, arg2, arg3) {
+  return window['go']['main']['App']['OAuth2Exchange'](arg1, arg2, arg3);
+}
+
+export function OAuth2FetchToken(arg1, arg2) {
+  return window['go']['main']['App']['OAuth2FetchToken'](arg1, arg2);
+}
+
+export function OAuth2Start(arg1, arg2) {
+  return window['go']['main']['App']['OAuth2Start'](arg1, arg2);
+}
+
+export function ParseCurl(arg1) {
+  return window['go']['main']['App']['ParseCurl'](arg1);
+}
+
+export function SaveCookie(arg1) {
+  return window['go']['main']['App']['SaveCookie'](arg1);
+}
+
+export function SendRequestWithID(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SendRequestWithID'](arg1, arg2, arg3);
+}
+
+export function ValidateJSONSchema(arg1, arg2) {
+  return window['go']['main']['App']['ValidateJSONSchema'](arg1, arg2);
+}
+
+export function WSClear(arg1) {
+  return window['go']['main']['App']['WSClear'](arg1);
+}
+
+export function WSPing(arg1) {
+  return window['go']['main']['App']['WSPing'](arg1);
+}

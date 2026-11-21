@@ -66,6 +66,7 @@ export function SyntaxEditor({
   const dark = useIsDarkMode()
   const editorFontSize = useWorkspaceStore((s) => s.settings.editorFontSize || 13)
   const tabSize = useWorkspaceStore((s) => s.settings.editorTabSize || 2)
+  const fontFamily = useWorkspaceStore((s) => s.settings.editorFontFamily || "mono")
 
   const extensions = useMemo(() => {
     const ext: Extension[] = [...languageExtension(language)]
@@ -74,13 +75,13 @@ export function SyntaxEditor({
       EditorView.theme({
         "&": { fontSize: `${editorFontSize}px`, height: "100%" },
         ".cm-scroller": { overflow: "auto" },
-        ".cm-content": { fontFamily: "JetBrains Mono, Fira Code, monospace" },
+        ".cm-content": { fontFamily: "var(--pw-editor-font, 'Source Code Pro', ui-monospace, monospace)" },
         ".cm-gutters": { borderRight: "1px solid hsl(var(--border))" },
         "&.cm-focused": { outline: "none" },
       }),
     )
     return ext
-  }, [language, wrap, editorFontSize])
+  }, [language, wrap, editorFontSize, fontFamily])
 
   return (
     <div

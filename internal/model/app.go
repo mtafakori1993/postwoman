@@ -21,6 +21,19 @@ type AppSettings struct {
 	KeyboardShortcuts      map[string]string `json:"keyboardShortcuts"`
 	FollowRedirects        bool              `json:"followRedirects"`
 	SendNoCacheHeader      bool              `json:"sendNoCacheHeader"`
+
+	// Personalisation
+	AccentColor      string `json:"accentColor"`
+	EditorFontFamily string `json:"editorFontFamily"`
+	CompactMode      bool   `json:"compactMode"`
+	LayoutPreset     string `json:"layoutPreset"`
+
+	// Optional AI assistant (OpenAI-compatible chat-completions endpoint).
+	AIEnabled  bool   `json:"aiEnabled"`
+	AIProvider string `json:"aiProvider"`
+	AIBaseURL  string `json:"aiBaseUrl"`
+	AIAPIKey   string `json:"aiApiKey"`
+	AIModel    string `json:"aiModel"`
 }
 
 // DefaultAppSettings returns production defaults used on a fresh install.
@@ -42,6 +55,14 @@ func DefaultAppSettings() AppSettings {
 		KeyboardShortcuts:      map[string]string{},
 		FollowRedirects:        true,
 		SendNoCacheHeader:      false,
+		AccentColor:            "orange",
+		EditorFontFamily:       "mono",
+		CompactMode:            false,
+		LayoutPreset:           "default",
+		AIEnabled:              false,
+		AIProvider:             "openai",
+		AIBaseURL:              "https://api.openai.com/v1",
+		AIModel:                "gpt-4o-mini",
 	}
 }
 

@@ -5,6 +5,7 @@ import { Logo } from "@/components/ui/logo"
 import {
   ChevronLeft,
   ChevronRight,
+  Cookie,
   Folder,
   Globe,
   History,
@@ -21,6 +22,7 @@ import { HistoryPanel } from "../panels/HistoryPanel"
 import { MocksPanel } from "../panels/MocksPanel"
 import { WebSocketPanel } from "../panels/WebSocketPanel"
 import { SettingsPanel } from "../panels/SettingsPanel"
+import { CookieManagerPanel } from "../panels/CookieManagerPanel"
 
 const sidebarTabs: { id: SidebarTab; label: string; icon: React.ElementType }[] = [
   { id: "collections", label: "Collections", icon: Folder },
@@ -28,6 +30,7 @@ const sidebarTabs: { id: SidebarTab; label: string; icon: React.ElementType }[] 
   { id: "history", label: "History", icon: History },
   { id: "mocks", label: "Mock Servers", icon: Server },
   { id: "websocket", label: "WebSocket", icon: Radio },
+  { id: "cookies", label: "Cookies", icon: Cookie },
   { id: "settings", label: "Settings", icon: SettingsIcon },
 ]
 
@@ -43,6 +46,8 @@ function Panel({ tab }: { tab: SidebarTab }) {
       return <MocksPanel />
     case "websocket":
       return <WebSocketPanel />
+    case "cookies":
+      return <CookieManagerPanel />
     case "settings":
       return <SettingsPanel />
     default:

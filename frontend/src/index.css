@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Bundled program font: Source Code Pro (SIL Open Font License 1.1).
+ * The single regular weight is shipped with the app so the UI renders
+ * identically offline; the browser synthesises bold for headings.
+ */
+@font-face {
+  font-family: "Source Code Pro";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local("Source Code Pro"), url("./assets/fonts/SourceCodePro-Regular.ttf") format("truetype");
+}
+
+:root {
+  --pw-ui-font: "Source Code Pro", ui-monospace, "JetBrains Mono", "Fira Code", monospace;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -83,6 +100,7 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--pw-ui-font);
     font-feature-settings: "rlig" 1, "calt" 1;
   }
   
@@ -239,4 +257,44 @@
   .text-balance {
     text-wrap: balance;
   }
+}
+/* ------------------------------------------------------------------ */
+/* Personalisation: editor font stack + compact density               */
+/* ------------------------------------------------------------------ */
+
+:root {
+  --pw-editor-font: "Source Code Pro", ui-monospace, "JetBrains Mono", "Fira Code", monospace;
+}
+
+.pw-syntax-editor .cm-content,
+.pw-syntax-editor .cm-gutters {
+  font-family: var(--pw-editor-font);
+}
+
+/* Compact mode tightens row heights and paddings across the app. */
+.pw-compact .pw-table-cell {
+  padding-top: 0.15rem;
+  padding-bottom: 0.15rem;
+}
+
+.pw-compact [role="tab"] {
+  padding-top: 0.2rem;
+  padding-bottom: 0.2rem;
+}
+
+.pw-compact .pw-sidebar-item {
+  padding-top: 0.15rem;
+  padding-bottom: 0.15rem;
+}
+
+.pw-compact .pw-btn-primary,
+.pw-compact .pw-btn-secondary {
+  padding-top: 0.3rem;
+  padding-bottom: 0.3rem;
+}
+
+/* Focus ring only for keyboard users on our custom tab strips. */
+.pw-focus-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px hsl(var(--ring));
 }

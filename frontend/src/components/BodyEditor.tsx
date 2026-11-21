@@ -5,19 +5,23 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { KeyValueEditor } from "./KeyValueEditor"
 import { SyntaxEditor } from "./SyntaxEditor"
-import { Header, KeyValuePair, BodyType, RequestBody } from "@/types"
+import { Header, KeyValuePair, BodyType, RequestBody, Request } from "@/types"
 import { cn } from "@/lib/utils"
 import {
   AlertCircle,
   Braces,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Code2,
   FileCode2,
   FileText,
   FileUp,
   Globe,
   HardDrive,
+  Loader2,
   Minimize2,
+  RefreshCw,
   Upload,
   Wand2,
   X,
@@ -51,9 +55,19 @@ interface BodyEditorProps {
   method: string
   headers: Header[]
   onHeadersChange: (headers: Header[]) => void
+  request?: Request | null
+  environmentId?: string | null
 }
 
-export function BodyEditor({ body, onChange, method, headers, onHeadersChange }: BodyEditorProps) {
+interface GraphQLTypeInfo {
+  name: string
+  kind: string
+  description?: string
+  fields: { name: string; type: string; description?: string }[]
+  enumValues?: string[]
+}
+
+export function BodyEditor({ body, onChange, method, headers, onHeadersChange, request, environmentId }: BodyEditorProps) {
   const activeType = (body.mode || "none") as BodyType
   const rawText = body.raw || ""
   const formData = body.formdata || []
@@ -65,6 +79,78 @@ export function BodyEditor({ body, onChange, method, headers, onHeadersChange }:
   const [binaryMeta, setBinaryMeta] = useState<{ name: string; size: number } | null>(null)
   const [bodyError, setBodyError] = useState<string | null>(null)
   const [formatError, setFormatError] = useState<string | null>(null)
+  const [schemaTypes, setSchemaTypes] = useState<GraphQLTypeInfo[]>([])
+  const [schemaError, setSchemaError] = useState<string | null>(null)
+  const [schemaBusy, setSchemaBusy] = useState(false)
+  const [schemaOpen, setSchemaOpen] = useState(true)
+  const [openType, setOpenType] = useState<string | null>(null)
+  const schemaStorageKey = request?.url ? `postwoman.graphqlSchema:${request.url}` : ""
+
+  useEffect(() => {
+    if (!schemaStorageKey) {
+      setSchemaTypes([])
+      return
+    }
+    try {
+      const raw = localStorage.getItem(schemaStorageKey)
+      setSchemaTypes(raw ? (JSON.parse(raw) as GraphQLTypeInfo[]) : [])
+    } catch {
+      setSchemaTypes([])
+    }
+    setSchemaError(null)
+  }, [schemaStorageKey])
+
+  const fetchSchema = async () => {
+    if (!request) {
+      setSchemaError("Open a request before introspecting its schema.")
+      return
+    }
+    setSchemaBusy(true)
+    setSchemaError(null)
+    try {
+      const raw = await api.graphqlIntrospect(request, environmentId ?? "")
+      const parsed = JSON.parse(raw) as {
+        data?: { __schema?: { types?: any[] } }
+        errors?: { message: string }[]
+      }
+      if (parsed.errors?.length) throw new Error(parsed.errors.map((e) => e.message).join("; "))
+      const types = (parsed.data?.__schema?.types ?? []).filter((t: any) => !String(t.name).startsWith("__"))
+      const mapped: GraphQLTypeInfo[] = types
+        .filter((t: any) => t.fields || t.enumValues)
+        .map((t: any) => ({
+          name: String(t.name),
+          kind: String(t.kind ?? ""),
+          description: t.description ?? undefined,
+          fields: (t.fields ?? []).map((f: any) => ({ name: String(f.name), type: renderTypeRef(f.type), description: f.description })),
+          enumValues: (t.enumValues ?? []).map((v: any) => String(v.name)),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+      setSchemaTypes(mapped)
+      if (schemaStorageKey) localStorage.setItem(schemaStorageKey, JSON.stringify(mapped))
+    } catch (err) {
+      setSchemaError(api.errorMessage(err))
+    } finally {
+      setSchemaBusy(false)
+    }
+  }
+
+  const graphqlIssue = useMemo(() => {
+    if (activeType !== "graphql" || !graphqlQuery.trim()) return null
+    let depth = 0
+    for (const char of graphqlQuery) {
+      if (char === "{") depth += 1
+      else if (char === "}") {
+        depth -= 1
+        if (depth < 0) return "Unbalanced braces: unexpected '}'"
+      }
+    }
+    if (depth !== 0) return "Unbalanced braces: a '{' is not closed"
+    const rootField = /(?:query|mutation|subscription)?[^{]*{\s*([A-Za-z_][A-Za-z0-9_]*)/.exec(graphqlQuery)?.[1]
+    if (rootField && schemaTypes.length > 0 && !schemaTypes.some((t) => t.fields.some((f) => f.name === rootField))) {
+      return `Root field "${rootField}" was not found in the introspected schema`
+    }
+    return null
+  }, [activeType, graphqlQuery, schemaTypes])
 
   const language = languageForBody(activeType)
   const isRawEditor = ["raw", "json", "xml", "text", "javascript", "html"].includes(activeType)
@@ -376,19 +462,29 @@ export function BodyEditor({ body, onChange, method, headers, onHeadersChange }:
 
       {activeType === "graphql" && (
         <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={fetchSchema} disabled={schemaBusy}>
+              {schemaBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              Introspect schema
+            </Button>
+            {schemaTypes.length > 0 && <span className="text-[11px] text-muted-foreground">{schemaTypes.length} types loaded</span>}
+            {graphqlIssue ? (
+              <span className="flex items-center gap-1 text-[11px] text-destructive">
+                <AlertCircle className="h-3 w-3" /> {graphqlIssue}
+              </span>
+            ) : graphqlQuery.trim() ? (
+              <span className="flex items-center gap-1 text-[11px] text-green-600 dark:text-green-400">
+                <CheckCircle2 className="h-3 w-3" /> Query looks valid
+              </span>
+            ) : null}
+          </div>
+
           <div className="overflow-hidden rounded-md border border-border">
-            <div className="border-b border-border bg-muted/30 px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Query
-            </div>
+            <div className="border-b border-border bg-muted/30 px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Query</div>
             <div style={{ height: "clamp(160px, 30vh, 360px)" }}>
               <SyntaxEditor
                 value={graphqlQuery}
-                onChange={(query) =>
-                  updateBody({
-                    mode: "graphql",
-                    graphql: { query, variables: graphqlVariables },
-                  })
-                }
+                onChange={(query) => updateBody({ mode: "graphql", graphql: { query, variables: graphqlVariables } })}
                 language="javascript"
                 placeholder={"query {\n  users {\n    id\n    name\n  }\n}"}
                 minHeight="100%"
@@ -396,19 +492,13 @@ export function BodyEditor({ body, onChange, method, headers, onHeadersChange }:
               />
             </div>
           </div>
+
           <div className="overflow-hidden rounded-md border border-border">
-            <div className="border-b border-border bg-muted/30 px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Variables
-            </div>
+            <div className="border-b border-border bg-muted/30 px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Variables</div>
             <div style={{ height: "140px" }}>
               <SyntaxEditor
                 value={graphqlVariables}
-                onChange={(variables) =>
-                  updateBody({
-                    mode: "graphql",
-                    graphql: { query: graphqlQuery, variables },
-                  })
-                }
+                onChange={(variables) => updateBody({ mode: "graphql", graphql: { query: graphqlQuery, variables } })}
                 language="json"
                 placeholder={'{\n  "limit": 10\n}'}
                 minHeight="100%"
@@ -418,6 +508,54 @@ export function BodyEditor({ body, onChange, method, headers, onHeadersChange }:
           </div>
           {validateContent(graphqlVariables, "json") && (
             <InlineError message={`GraphQL variables: ${validateContent(graphqlVariables, "json")}`} />
+          )}
+
+          {schemaError && <InlineError message={schemaError} onClose={() => setSchemaError(null)} />}
+
+          {schemaTypes.length > 0 && (
+            <div className="overflow-hidden rounded-md border border-border">
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 border-b border-border bg-muted/30 px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+                onClick={() => setSchemaOpen((v) => !v)}
+              >
+                {schemaOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                Schema explorer
+              </button>
+              {schemaOpen && (
+                <div className="max-h-64 divide-y divide-border/50 overflow-y-auto">
+                  {schemaTypes.map((type) => (
+                    <div key={type.name}>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 px-2.5 py-1 text-left text-xs hover:bg-muted/40"
+                        onClick={() => setOpenType((current) => (current === type.name ? null : type.name))}
+                      >
+                        {openType === type.name ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                        <span className="font-mono font-medium">{type.name}</span>
+                        <span className="ml-auto rounded bg-muted px-1 text-[10px] text-muted-foreground">
+                          {type.kind.replace(/_/g, " ").toLowerCase()}
+                        </span>
+                      </button>
+                      {openType === type.name && (
+                        <div className="bg-muted/10 px-6 py-1.5 font-mono text-[11px]">
+                          {type.description && <p className="mb-1 text-muted-foreground italic">{type.description}</p>}
+                          {type.fields.map((field) => (
+                            <div key={field.name} className="flex gap-2">
+                              <span>{field.name}</span>
+                              <span className="text-muted-foreground">{field.type}</span>
+                            </div>
+                          ))}
+                          {type.enumValues && type.enumValues.length > 0 && (
+                            <div className="text-muted-foreground">{type.enumValues.join(" | ")}</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -552,4 +690,11 @@ function formatBytes(bytes: number): string {
   const sizes = ["B", "KB", "MB", "GB"]
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`
+}
+
+function renderTypeRef(ref: any): string {
+  if (!ref) return "Unknown"
+  if (ref.kind === "NON_NULL") return `${renderTypeRef(ref.ofType)}!`
+  if (ref.kind === "LIST") return `[${renderTypeRef(ref.ofType)}]`
+  return String(ref.name ?? "Unknown")
 }

@@ -2,7 +2,13 @@ import React from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Menu, Search, Moon, Sun, Plus, Play, Upload } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Keyboard, Link, Menu, Search, Moon, Sun, Plus, Play, Sparkles, Terminal, Upload } from "lucide-react"
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip"
 import { useWorkspaceStore } from "@/stores/workspace"
 import { Logo } from "@/components/ui/logo"
@@ -12,9 +18,13 @@ interface TopBarProps {
   onSearch: () => void
   onOpenRunner: () => void
   onImport: () => void
+  onImportUrl: () => void
+  onImportCurl: () => void
+  onOpenShortcuts: () => void
+  onOpenAI: () => void
 }
 
-export function TopBar({ onNewTab, onSearch, onOpenRunner, onImport }: TopBarProps) {
+export function TopBar({ onNewTab, onSearch, onOpenRunner, onImport, onImportUrl, onImportCurl, onOpenShortcuts, onOpenAI }: TopBarProps) {
   const {
     settings,
     updateSettings,
@@ -106,14 +116,29 @@ export function TopBar({ onNewTab, onSearch, onOpenRunner, onImport }: TopBarPro
         </div>
 
         <div className="flex items-center gap-1 ml-auto shrink-0">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={onImport} aria-label="Import">
-                <Upload className="h-5 w-5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Import collection / environment / OpenAPI / HAR</TooltipContent>
-          </Tooltip>
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Import">
+                    <Upload className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Import</TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onImport}>
+                <Upload className="mr-2 h-3.5 w-3.5" /> From file (Postman / OpenAPI / HAR)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onImportUrl}>
+                <Link className="mr-2 h-3.5 w-3.5" /> From URL (OpenAPI / Swagger)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onImportCurl}>
+                <Terminal className="mr-2 h-3.5 w-3.5" /> Paste cURL command
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <Tooltip>
             <TooltipTrigger asChild>
@@ -122,6 +147,24 @@ export function TopBar({ onNewTab, onSearch, onOpenRunner, onImport }: TopBarPro
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">Collection runner</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={onOpenAI} aria-label="AI assistant">
+                <Sparkles className="h-5 w-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">AI assistant</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={onOpenShortcuts} aria-label="Keyboard shortcuts">
+                <Keyboard className="h-5 w-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Keyboard shortcuts (Ctrl+/)</TooltipContent>
           </Tooltip>
 
           <Tooltip>

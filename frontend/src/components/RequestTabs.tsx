@@ -8,7 +8,7 @@ import {
   ContextMenuShortcut,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
-import { ChevronLeft, ChevronRight, Copy, Layers, Plus, X, XCircle } from "lucide-react"
+import { ChevronLeft, ChevronRight, Copy, Layers, Link2, Pin, PinOff, Plus, RotateCcw, X, XCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { TabState, TabPreferences } from "@/types"
 
@@ -23,6 +23,10 @@ interface RequestTabsProps {
   onTabCloseToRight: (id: string) => void
   onTabCloseAll: () => void
   onTabDuplicate: (id: string) => void
+  onTabPin: (id: string) => void
+  onTabCopyUrl: (id: string) => void
+  onTabRestore: () => void
+  restoreCount: number
   preferences: TabPreferences
 }
 
@@ -37,6 +41,10 @@ export function RequestTabs({
   onTabCloseToRight,
   onTabCloseAll,
   onTabDuplicate,
+  onTabPin,
+  onTabCopyUrl,
+  onTabRestore,
+  restoreCount,
   preferences,
 }: RequestTabsProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -139,6 +147,7 @@ export function RequestTabs({
                       : "text-foreground/70 hover:text-foreground hover:bg-muted/60 border-transparent",
                   )}
                 >
+                  {tab.pinned && <Pin className="h-3 w-3 shrink-0 text-primary" aria-label="Pinned tab" />}
                   {tab.request && (
                     <span className={cn("font-mono text-[10px] font-bold shrink-0", methodColor(tab.request.method))}>
                       {tab.request.method}
@@ -201,6 +210,20 @@ export function RequestTabs({
                 <ContextMenuItem onSelect={() => onTabDuplicate(tab.id)}>
                   <Copy className="h-4 w-4" />
                   Duplicate Tab
+                </ContextMenuItem>
+                <ContextMenuItem onSelect={() => onTabPin(tab.id)}>
+                  {tab.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+                  {tab.pinned ? "Unpin Tab" : "Pin Tab"}
+                </ContextMenuItem>
+                <ContextMenuItem onSelect={() => onTabCopyUrl(tab.id)}>
+                  <Link2 className="h-4 w-4" />
+                  Copy Request URL
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onSelect={onTabRestore} disabled={restoreCount === 0}>
+                  <RotateCcw className="h-4 w-4" />
+                  Reopen Closed Tab
+                  <ContextMenuShortcut>Ctrl+Shift+T</ContextMenuShortcut>
                 </ContextMenuItem>
               </ContextMenuContent>
             </ContextMenu>

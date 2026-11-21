@@ -13,6 +13,7 @@ import type {
   RequestHistoryEntry,
   Response,
   SidebarTab,
+  StoredCookie,
   TabState,
   TabPreferences,
   WebSocketConnection,
@@ -49,6 +50,15 @@ export function defaultSettings(): AppSettings {
     keyboardShortcuts: {},
     followRedirects: true,
     sendNoCacheHeader: false,
+    accentColor: "orange",
+    editorFontFamily: "mono",
+    compactMode: false,
+    layoutPreset: "default",
+    aiEnabled: false,
+    aiProvider: "openai",
+    aiBaseUrl: "https://api.openai.com/v1",
+    aiApiKey: "",
+    aiModel: "gpt-4o-mini",
   }
 }
 
@@ -203,9 +213,121 @@ interface WorkspaceState {
   setActiveSidebarTab: (tab: SidebarTab) => void
   setResponsePanelHeight: (height: number) => void
   setTabPreferences: (patch: Partial<TabPreferences>) => void
+
+  // url focus signal (Ctrl+L)
+  focusUrlSignal: number
+  requestUrlFocus: () => void
+
+  // tabs: pinning and recently closed
+  pinnedTabIds: string[]
+  togglePinTab: (id: string) => void
+  closedTabs: TabState[]
+  restoreLastClosedTab: () => TabState | null
+
+  // favourites and recents (persisted locally)
+  favoriteRequestIds: string[]
+  toggleFavoriteRequest: (id: string) => void
+  recentRequestIds: string[]
+  openDraft: (request: Request, title?: string) => TabState
+
+  // collections: organise and metadata
+  moveRequest: (requestId: string, target: { collectionId: string; folderId?: string }) => Promise<void>
+  moveFolder: (folderId: string, target: { collectionId?: string; parentId?: string }) => Promise<void>
+  updateCollectionMeta: (collection: Collection) => Promise<void>
+  copyActiveRequestCurl: () => Promise<void>
+  importFromURL: (sourceURL: string) => Promise<api.ImportResult | null>
+
+  // cookies
+  cookies: StoredCookie[]
+  refreshCookies: () => Promise<void>
+  saveCookie: (input: StoredCookie) => Promise<void>
+  deleteCookie: (url: string, name: string) => Promise<void>
+  clearCookies: () => Promise<void>
+
+  // layout presets
+  applyLayoutPreset: (preset: string) => void
+
+  // cancelling
+  sendingRequestId: string | null
 }
 
 const LAYOUT_KEY = "postwoman.layout"
+const PINNED_TABS_KEY = "postwoman.pinnedTabs"
+const CLOSED_TABS_KEY = "postwoman.closedTabs"
+const FAVORITES_KEY = "postwoman.favorites"
+const RECENTS_KEY = "postwoman.recentRequests"
+
+function loadStringArray(key: string): string[] {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.filter((v) => typeof v === "string") : []
+  } catch {
+    return []
+  }
+}
+
+function saveStringArray(key: string, values: string[]) {
+  try {
+    localStorage.setItem(key, JSON.stringify(values))
+  } catch {
+    /* best effort */
+  }
+}
+
+function loadClosedTabs(): TabState[] {
+  try {
+    const raw = localStorage.getItem(CLOSED_TABS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? (parsed as TabState[]) : []
+  } catch {
+    return []
+  }
+}
+
+function saveClosedTabs(tabs: TabState[]) {
+  try {
+    localStorage.setItem(CLOSED_TABS_KEY, JSON.stringify(tabs.slice(-15)))
+  } catch {
+    /* best effort */
+  }
+}
+
+/** Stable ordering used when requests/folders are reordered. */
+function compareOrder<T extends { order?: number; name?: string }>(a: T, b: T): number {
+  const ao = a.order ?? 0
+  const bo = b.order ?? 0
+  if (ao !== bo) return ao - bo
+  return (a.name || "").localeCompare(b.name || "")
+}
+
+/** Layout presets applied from the settings panel or the command palette. */
+export function layoutPresetValues(preset: string): {
+  sidebarOpen: boolean
+  sidebarWidth: number
+  responsePanelHeight: number
+  activeSidebarTab: SidebarTab
+} {
+  switch (preset) {
+    case "minimal":
+      return { sidebarOpen: false, sidebarWidth: 280, responsePanelHeight: 240, activeSidebarTab: "collections" }
+    case "testing":
+      return { sidebarOpen: true, sidebarWidth: 320, responsePanelHeight: 380, activeSidebarTab: "history" }
+    case "json":
+      return { sidebarOpen: true, sidebarWidth: 240, responsePanelHeight: 520, activeSidebarTab: "collections" }
+    case "wide":
+      return {
+        sidebarOpen: true,
+        sidebarWidth: 220,
+        responsePanelHeight: Math.max(360, Math.round((globalThis.innerHeight || 800) * 0.6)),
+        activeSidebarTab: "collections",
+      }
+    default:
+      return { sidebarOpen: true, sidebarWidth: 280, responsePanelHeight: 320, activeSidebarTab: "collections" }
+  }
+}
 
 function loadLayout(): {
   sidebarOpen: boolean
@@ -311,6 +433,14 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     activeSidebarTab: layout.activeSidebarTab,
     responsePanelHeight: layout.responsePanelHeight,
     tabPreferences: layout.tabPreferences,
+
+    focusUrlSignal: 0,
+    pinnedTabIds: loadStringArray(PINNED_TABS_KEY),
+    closedTabs: loadClosedTabs(),
+    favoriteRequestIds: loadStringArray(FAVORITES_KEY),
+    recentRequestIds: loadStringArray(RECENTS_KEY),
+    cookies: [],
+    sendingRequestId: null,
 
     // ------------------------------------------------------------- lifecycle
 
@@ -624,6 +754,9 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     },
 
     openRequest: async (id) => {
+      const recents = [id, ...get().recentRequestIds.filter((item) => item !== id)].slice(0, 20)
+      set({ recentRequestIds: recents })
+      saveStringArray(RECENTS_KEY, recents)
       const existing = get().tabs.find((t) => t.requestId === id)
       if (existing) {
         set({ activeTabId: existing.id })
@@ -678,6 +811,13 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     closeTabs: (ids) => {
       const remove = new Set(ids)
       if (remove.size === 0) return
+      const removed = get().tabs.filter((t) => remove.has(t.id) && t.request)
+      if (removed.length > 0) {
+        const closed = [...get().closedTabs, ...removed.map((t) => ({ ...deepClone(t), pinned: false }))]
+        const trimmed = closed.slice(-15)
+        set({ closedTabs: trimmed })
+        saveClosedTabs(trimmed)
+      }
       set((s) => {
         const currentIndex = s.activeTabId ? s.tabs.findIndex((t) => t.id === s.activeTabId) : -1
         const tabs = s.tabs.filter((t) => !remove.has(t.id))
@@ -782,9 +922,10 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
       const { activeTabId, tabs, activeEnvironmentId } = get()
       const tab = tabs.find((t) => t.id === activeTabId)
       if (!tab || !tab.request) return
-      set({ sendingTabId: tab.id })
+      const requestId = `${tab.id}:${Date.now()}`
+      set({ sendingTabId: tab.id, sendingRequestId: requestId })
       try {
-        const response = await api.sendRequest(tab.request, activeEnvironmentId ?? "")
+        const response = await api.sendRequestWithID(requestId, tab.request, activeEnvironmentId ?? "")
         get().setTabResponse(tab.id, response)
       } catch (error) {
         const message = api.errorMessage(error)
@@ -804,7 +945,10 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
           console: [],
         })
       } finally {
-        set({ sendingTabId: null })
+        set((s) => ({
+          sendingTabId: s.sendingTabId === tab.id ? null : s.sendingTabId,
+          sendingRequestId: s.sendingRequestId === requestId ? null : s.sendingRequestId,
+        }))
         // Scripts may have mutated variables or produced history entries.
         get().refreshHistory()
         get().refreshEnvironments()
@@ -812,10 +956,11 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     },
 
     cancelActiveRequest: () => {
-      // The Go backend cancels by request id; the UI surfaces this via the
-      // active tab's request id. Cancellation of ad-hoc requests is handled by
-      // the timeout, so this is a best-effort no-op for unsaved requests.
-      set({ sendingTabId: null })
+      const { sendingRequestId } = get()
+      if (sendingRequestId) {
+        api.cancelRequest(sendingRequestId).catch((err) => console.error("Failed to cancel request:", err))
+      }
+      set({ sendingTabId: null, sendingRequestId: null })
     },
 
     // -------------------------------------------------- environments & vars
@@ -961,6 +1106,156 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
         saveLayout(next)
         return { tabPreferences }
       })
+    },
+
+    // ------------------------------------------------- focus / tabs / recents
+
+    requestUrlFocus: () => set((s) => ({ focusUrlSignal: s.focusUrlSignal + 1 })),
+
+    togglePinTab: (id) => {
+      const current = get().pinnedTabIds
+      const next = current.includes(id) ? current.filter((t) => t !== id) : [...current, id]
+      saveStringArray(PINNED_TABS_KEY, next)
+      set((s) => {
+        // Pinned tabs are kept at the front of the strip, matching editors
+        // like VS Code.
+        const pinned = s.tabs.filter((t) => next.includes(t.id))
+        const unpinned = s.tabs.filter((t) => !next.includes(t.id))
+        const tabs = [...pinned, ...unpinned].map((t) => ({ ...t, pinned: next.includes(t.id) }))
+        return { pinnedTabIds: next, tabs }
+      })
+      scheduleTabSave()
+    },
+
+    restoreLastClosedTab: () => {
+      const closed = get().closedTabs
+      if (closed.length === 0) return null
+      const last = closed[closed.length - 1]
+      const remaining = closed.slice(0, -1)
+      set({ closedTabs: remaining })
+      saveClosedTabs(remaining)
+      const draft = last.request
+        ? { ...deepClone(last.request), id: "", collectionId: last.request?.collectionId ?? "" }
+        : newRequestDraft()
+      return get().openDraft(draft, last.title)
+    },
+
+    openDraft: (request, title) => get().newTab(request, title),
+
+    toggleFavoriteRequest: (id) => {
+      const current = get().favoriteRequestIds
+      const next = current.includes(id) ? current.filter((r) => r !== id) : [...current, id]
+      saveStringArray(FAVORITES_KEY, next)
+      set({ favoriteRequestIds: next })
+    },
+
+    // ---------------------------------------------- organise collections tree
+
+    moveRequest: async (requestId, target) => {
+      const request = get().requests.find((r) => r.id === requestId)
+      if (!request) return
+      const siblings = get().requests.filter(
+        (r) => r.id !== requestId
+          && r.collectionId === target.collectionId
+          && (r.folderId || "") === (target.folderId || ""),
+      )
+      const updated: Request = {
+        ...request,
+        collectionId: target.collectionId,
+        folderId: target.folderId,
+        order: siblings.length,
+        updatedAt: Date.now(),
+      }
+      set((s) => ({
+        requests: [...s.requests.filter((r) => r.id !== requestId), updated].sort(compareOrder),
+      }))
+      try {
+        await api.updateRequest(updated)
+      } catch (err) {
+        console.error("Failed to move request:", err)
+      }
+    },
+
+    moveFolder: async (folderId, target) => {
+      const folder = get().folders.find((f) => f.id === folderId)
+      if (!folder) return
+      const nextCollection = target.collectionId ?? folder.collectionId
+      const updated: Folder = {
+        ...folder,
+        collectionId: nextCollection,
+        parentId: target.parentId,
+        updatedAt: Date.now(),
+      }
+      set((s) => ({ folders: s.folders.map((f) => (f.id === folderId ? updated : f)) }))
+      try {
+        await api.updateFolder(updated)
+      } catch (err) {
+        console.error("Failed to move folder:", err)
+      }
+    },
+
+    updateCollectionMeta: async (collection) => {
+      set((s) => ({ collections: s.collections.map((c) => (c.id === collection.id ? collection : c)) }))
+      try {
+        await api.updateCollection(collection)
+      } catch (err) {
+        console.error("Failed to update collection:", err)
+        throw new Error(api.errorMessage(err))
+      }
+    },
+
+    copyActiveRequestCurl: async () => {
+      const { activeTabId, tabs } = get()
+      const tab = tabs.find((t) => t.id === activeTabId)
+      if (!tab?.request) return
+      const curl = await api.exportRequestCurl(tab.request)
+      await api.copyToClipboard(curl)
+    },
+
+    importFromURL: async (sourceURL) => {
+      const ws = get().workspace
+      if (!ws) return null
+      const result = await api.importFromURL(ws.id, sourceURL)
+      await get().refreshCollections()
+      await get().refreshEnvironments()
+      return result
+    },
+
+    // ---------------------------------------------------------------- cookies
+
+    refreshCookies: async () => {
+      try {
+        set({ cookies: await api.listCookies() })
+      } catch (err) {
+        console.error("Failed to load cookies:", err)
+      }
+    },
+
+    saveCookie: async (input) => {
+      await api.saveCookie(input)
+      await get().refreshCookies()
+    },
+
+    deleteCookie: async (url, name) => {
+      await api.deleteCookie(url, name)
+      await get().refreshCookies()
+    },
+
+    clearCookies: async () => {
+      await api.clearCookies()
+      set({ cookies: [] })
+    },
+
+    // ----------------------------------------------------------- layout presets
+
+    applyLayoutPreset: (preset) => {
+      const values = layoutPresetValues(preset)
+      set((s) => {
+        const next = { ...s, ...values }
+        saveLayout(next)
+        return values
+      })
+      get().updateSettings({ layoutPreset: preset })
     },
   }
 })

@@ -256,10 +256,12 @@ func splitShell(s string) ([]string, error) {
 // ExportAsCurl renders a request as a cURL command.
 func ExportAsCurl(req *model.Request) string {
 	parts := []string{"curl", "-X", strings.ToUpper(orString(req.Method, "GET"))}
-	for _, h := range req.Headers {
-		if h.Enabled && h.Key != "" {
-			parts = append(parts, "-H", shellQuote(h.Key+": "+h.Value))
+	for _, h := range codeHeaders(req) {
+		if strings.EqualFold(h.Key, "Content-Type") && req.Body.Mode == "formdata" {
+			// curl generates its own multipart boundary.
+			continue
 		}
+		parts = append(parts, "-H", shellQuote(h.Key+": "+h.Value))
 	}
 	switch req.Body.Mode {
 	case "json", "xml", "text", "javascript", "html", "raw":
@@ -285,24 +287,53 @@ func ExportAsCurl(req *model.Request) string {
 			payload, _ := json.Marshal(map[string]any{
 				"query": req.Body.GraphQL.Query, "variables": variables,
 			})
-			parts = append(parts, "-H", shellQuote("Content-Type: application/json"), "--data-raw", shellQuote(string(payload)))
+			parts = append(parts, "--data-raw", shellQuote(string(payload)))
 		}
 	case "formdata":
 		for _, kv := range req.Body.FormData {
 			if !kv.Enabled || kv.Key == "" {
 				continue
 			}
-			if kv.Type == "file" && kv.Src != "" {
-				parts = append(parts, "-F", shellQuote(kv.Key+"=@"+kv.Src))
+			if kv.Type == "file" {
+				path := orString(kv.Src, kv.Value)
+				if kv.ContentType != "" {
+					parts = append(parts, "-F", shellQuote(kv.Key+"=@"+path+";type="+kv.ContentType))
+				} else {
+					parts = append(parts, "-F", shellQuote(kv.Key+"=@"+path))
+				}
 			} else {
 				parts = append(parts, "-F", shellQuote(kv.Key+"="+kv.Value))
 			}
 		}
+	case "binary":
+		if req.Body.FileName != "" {
+			parts = append(parts, "--data-binary", shellQuote("@"+req.Body.FileName))
+		}
 	}
-	parts = append(parts, shellQuote(req.URL))
+	parts = append(parts, shellQuote(finalURL(req)))
 	return strings.Join(parts, " ")
 }
 
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// ParseCurlAsRequest converts a cURL command into a single request draft. It
+// is used by the "Import cURL" dialog to open the command in an editable tab.
+func ParseCurlAsRequest(command string) (*model.Request, error) {
+	parsed, err := parseCurl(command)
+	if err != nil {
+		return nil, err
+	}
+	if len(parsed.Collections) == 0 || len(parsed.Collections[0].Requests) == 0 {
+		return nil, fmt.Errorf("cURL command did not produce a request")
+	}
+	req := parsed.Collections[0].Requests[0]
+	req.ID = ""
+	req.CollectionID = ""
+	req.FolderID = nil
+	if strings.TrimSpace(req.Name) == "" {
+		req.Name = "Imported cURL"
+	}
+	return &req, nil
 }

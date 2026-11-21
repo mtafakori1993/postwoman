@@ -9,6 +9,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 import {
+  BookOpen,
   ChevronRight,
   ChevronDown,
   Folder as FolderIcon,
@@ -20,11 +21,20 @@ import {
   Upload,
   Copy,
   Pencil,
+  Settings2,
+  Star,
   Trash2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useWorkspaceStore } from "@/stores/workspace"
+import { CollectionSettingsDialog } from "../CollectionSettingsDialog"
+import { CollectionDocsDialog } from "../CollectionDocsDialog"
+import { isSecretValue } from "@/lib/variables"
 import type { Collection, Folder, Request } from "@/types"
+
+// HTML5 drag-and-drop cannot reliably read custom MIME types during dragover in
+// every webview, so the dragged request id is also kept in module scope.
+let draggedRequestId: string | null = null
 
 type CreateTarget =
   | { kind: "collection" }
@@ -102,8 +112,9 @@ function RequestRow({
   request: Request
   depth: number
 }) {
-  const { openRequest, duplicateRequest, deleteRequest } = useWorkspaceStore()
+  const { openRequest, duplicateRequest, deleteRequest, favoriteRequestIds, toggleFavoriteRequest } = useWorkspaceStore()
   const [renaming, setRenaming] = useState(false)
+  const isFavorite = favoriteRequestIds.includes(request.id)
 
   if (renaming) {
     return (
@@ -125,11 +136,33 @@ function RequestRow({
       className="group flex items-center gap-1 px-2 py-1 hover:bg-muted/50 rounded cursor-pointer"
       style={{ paddingLeft: depth * 12 + 8 }}
       onClick={() => openRequest(request.id)}
+      draggable
+      onDragStart={(event) => {
+        draggedRequestId = request.id
+        event.dataTransfer.setData("text/plain", request.id)
+        event.dataTransfer.effectAllowed = "move"
+      }}
+      onDragEnd={() => {
+        draggedRequestId = null
+      }}
     >
       <MethodDot method={request.method} />
-      <span className="flex-1 text-sm truncate" title={request.name}>
+      <span className="flex-1 text-sm truncate" title={request.description || request.name}>
         {request.name}
       </span>
+      <Button
+        variant="ghost"
+        size="icon"
+        className={cn("h-6 w-6 p-0 shrink-0", isFavorite ? "text-amber-500" : "opacity-0 group-hover:opacity-100 text-muted-foreground")}
+        aria-label={isFavorite ? "Remove from favourites" : "Add to favourites"}
+        title={isFavorite ? "Remove from favourites" : "Add to favourites"}
+        onClick={(event) => {
+          event.stopPropagation()
+          toggleFavoriteRequest(request.id)
+        }}
+      >
+        <Star className={cn("h-3.5 w-3.5", isFavorite && "fill-current")} />
+      </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -195,6 +228,17 @@ function FolderNode({
         className="group flex items-center gap-1 px-2 py-1 hover:bg-muted/50 rounded cursor-pointer"
         style={{ paddingLeft: depth * 12 + 8 }}
         onClick={() => setExpanded((v) => !v)}
+        onDragOver={(event) => {
+          if (draggedRequestId) event.preventDefault()
+        }}
+        onDrop={(event) => {
+          const id = draggedRequestId || event.dataTransfer.getData("text/plain")
+          draggedRequestId = null
+          if (!id) return
+          event.preventDefault()
+          event.stopPropagation()
+          void useWorkspaceStore.getState().moveRequest(id, { collectionId, folderId: folder.id })
+        }}
       >
         <Button
           variant="ghost"
@@ -309,6 +353,8 @@ export function CollectionsPanel() {
     collections,
     folders,
     requests,
+    favoriteRequestIds,
+    recentRequestIds,
     createCollection,
     createFolder,
     createRequest,
@@ -320,6 +366,8 @@ export function CollectionsPanel() {
   } = useWorkspaceStore()
 
   const [createTarget, setCreateTarget] = useState<CreateTarget | null>(null)
+  const [settingsFor, setSettingsFor] = useState<Collection | null>(null)
+  const [docsFor, setDocsFor] = useState<Collection | null>(null)
   const [renamingCollection, setRenamingCollection] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [importMessage, setImportMessage] = useState<string | null>(null)
@@ -371,6 +419,34 @@ export function CollectionsPanel() {
           </div>
         )}
 
+        {(favoriteRequestIds.length > 0 || recentRequestIds.length > 0) && (
+          <div className="border-b border-border/60 pb-1">
+            {favoriteRequestIds.length > 0 && (
+              <>
+                <div className="px-3 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Favourites</div>
+                {favoriteRequestIds
+                  .map((id) => requests.find((r) => r.id === id))
+                  .filter((r): r is Request => Boolean(r))
+                  .map((request) => (
+                    <RequestRow key={`fav-${request.id}`} request={request} depth={0} />
+                  ))}
+              </>
+            )}
+            {recentRequestIds.length > 0 && (
+              <>
+                <div className="px-3 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Recent</div>
+                {recentRequestIds
+                  .slice(0, 5)
+                  .map((id) => requests.find((r) => r.id === id))
+                  .filter((r): r is Request => Boolean(r))
+                  .map((request) => (
+                    <RequestRow key={`recent-${request.id}`} request={request} depth={0} />
+                  ))}
+              </>
+            )}
+          </div>
+        )}
+
         {collections.length === 0 && createTarget?.kind !== "collection" && (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
             No collections yet. Create one or import a Postman collection, OpenAPI spec or HAR file.
@@ -379,7 +455,19 @@ export function CollectionsPanel() {
 
         {collections.map((collection) => (
           <div key={collection.id}>
-            <div className="group flex items-center gap-1 px-2 py-1 hover:bg-muted/50 rounded">
+            <div
+              className="group flex items-center gap-1 px-2 py-1 hover:bg-muted/50 rounded"
+              onDragOver={(event) => {
+                if (draggedRequestId) event.preventDefault()
+              }}
+              onDrop={(event) => {
+                const id = draggedRequestId || event.dataTransfer.getData("text/plain")
+                draggedRequestId = null
+                if (!id) return
+                event.preventDefault()
+                void useWorkspaceStore.getState().moveRequest(id, { collectionId: collection.id, folderId: undefined })
+              }}
+            >
               <Button
                 variant="ghost"
                 size="icon"
@@ -400,11 +488,14 @@ export function CollectionsPanel() {
                 />
               ) : (
                 <span
-                  className="flex-1 text-sm font-semibold truncate cursor-pointer"
-                  title={collection.info.name}
+                  className="min-w-0 flex-1 cursor-pointer"
+                  title={collection.info.description || collection.info.name}
                   onClick={() => toggle(collection.id)}
                 >
-                  {collection.info.name}
+                  <span className="block truncate text-sm font-semibold">{collection.info.name}</span>
+                  {collection.info.description && (
+                    <span className="block truncate text-[10px] text-muted-foreground">{collection.info.description}</span>
+                  )}
                 </span>
               )}
               <DropdownMenu>
@@ -423,10 +514,31 @@ export function CollectionsPanel() {
                   <DropdownMenuItem onClick={() => setRenamingCollection(collection.id)}>
                     <Pencil className="h-3.5 w-3.5 mr-2" /> Rename
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSettingsFor(collection)}>
+                    <Settings2 className="h-3.5 w-3.5 mr-2" /> Settings & variables
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setDocsFor(collection)}>
+                    <BookOpen className="h-3.5 w-3.5 mr-2" /> Documentation
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => duplicateCollection(collection.id)}>
                     <Copy className="h-3.5 w-3.5 mr-2" /> Duplicate
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => exportCollectionToFile(collection.id)}>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      const secrets = (collection.variables ?? []).filter(
+                        (v) => v.enabled !== false && isSecretValue(v.key, v.type),
+                      )
+                      if (secrets.length > 0) {
+                        const confirmed = window.confirm(
+                          `This collection contains ${secrets.length} secret variable(s) (${secrets
+                            .map((v) => v.key)
+                            .join(", ")}).\n\nExported files include variable values in clear text. Export anyway?`,
+                        )
+                        if (!confirmed) return
+                      }
+                      void exportCollectionToFile(collection.id)
+                    }}
+                  >
                     <Download className="h-3.5 w-3.5 mr-2" /> Export to file
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -493,6 +605,9 @@ export function CollectionsPanel() {
           </div>
         ))}
       </div>
+
+      <CollectionSettingsDialog open={settingsFor !== null} onOpenChange={(open) => !open && setSettingsFor(null)} collection={settingsFor} />
+      <CollectionDocsDialog open={docsFor !== null} onOpenChange={(open) => !open && setDocsFor(null)} collection={docsFor} />
     </div>
   )
 }

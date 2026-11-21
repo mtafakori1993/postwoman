@@ -29,6 +29,13 @@ import type {
   WSConnection,
   MockServer,
   MockRequestLog,
+  StoredCookie,
+  ExtractionResult,
+  JSONDiff,
+  OAuth2StartResult,
+  AIRequest,
+  AuthConfig,
+  OAuth2Config,
 } from "../types"
 
 export type * from "../types"
@@ -129,6 +136,83 @@ export const sendRequest = (request: Request, environmentID = "") =>
   guard<Response>(() =>
     App.SendRequest(asModel<model.Request>(request), {}, {}, {}, true, environmentID),
   )
+
+/** Cancellable send used by the editor. Call `cancelRequest` to abort. */
+export const sendRequestWithID = (requestID: string, request: Request, environmentID = "") =>
+  guard<Response>(() =>
+    App.SendRequestWithID(requestID, asModel<model.Request>(request), environmentID),
+  )
+
+export const cancelRequest = (requestID: string) => guard<void>(() => App.CancelRequest(requestID))
+
+/** Render the request as code for cURL/HTTP/fetch/Node/Python/Go/PHP. */
+export const exportRequestCode = (request: Request, target: string) =>
+  guard<string>(() => App.ExportRequestCode(asModel<model.Request>(request), target))
+
+/** Parse a cURL command into an editable request draft. */
+export const parseCurl = (command: string) => guard<Request>(() => App.ParseCurl(command))
+
+// -------------------------------------------------------- response tooling
+
+export const extractJSONPath = (body: string, path: string) =>
+  guard<ExtractionResult>(() => App.ExtractJSONPath(body, path))
+
+export const compareJSON = (left: string, right: string) =>
+  guard<JSONDiff>(() => App.CompareJSON(left, right))
+
+export const generateJSONSchema = (body: string) =>
+  guard<string>(() => App.GenerateJSONSchema(body))
+
+export const validateJSONSchema = (body: string, schema: string) =>
+  guard<string[]>(() => App.ValidateJSONSchema(body, schema))
+
+// ----------------------------------------------------------------- OAuth 2.0
+
+export const oauth2Start = (request: Request, environmentID = "") =>
+  guard<OAuth2StartResult>(() =>
+    App.OAuth2Start(asModel<model.Request>(request), environmentID),
+  )
+
+export const oauth2Exchange = (request: Request, environmentID: string, code: string) =>
+  guard<OAuth2Config>(() =>
+    App.OAuth2Exchange(asModel<model.Request>(request), environmentID, code),
+  )
+
+export const oauth2FetchToken = (request: Request, environmentID = "") =>
+  guard<OAuth2Config>(() =>
+    App.OAuth2FetchToken(asModel<model.Request>(request), environmentID),
+  )
+
+// ------------------------------------------------------------------- GraphQL
+
+export const graphqlIntrospect = (request: Request, environmentID = "") =>
+  guard<string>(() =>
+    App.GraphQLIntrospect(asModel<model.Request>(request), environmentID),
+  )
+
+// ------------------------------------------------------------------- cookies
+
+export const listCookies = () => guard<StoredCookie[]>(() => App.ListCookies())
+export const saveCookie = (input: StoredCookie) =>
+  guard<void>(() => App.SaveCookie(asModel<model.StoredCookie>(input)))
+export const deleteCookie = (url: string, name: string) =>
+  guard<void>(() => App.DeleteCookie(url, name))
+export const clearCookies = () => guard<void>(() => App.ClearCookies())
+
+// ------------------------------------------------------------- AI assistant
+
+export const aiAssist = (input: AIRequest) =>
+  guard<string>(() => App.AIAssist(asModel<model.AIRequest>(input)))
+
+// -------------------------------------------------------------- import URL
+
+export const importFromURL = (workspaceID: string, sourceURL: string) =>
+  guard<ImportResult>(() => App.ImportFromURL(workspaceID, sourceURL))
+
+// --------------------------------------------------------------- websocket+
+
+export const wsPing = (connectionID: string) => guard<void>(() => App.WSPing(connectionID))
+export const wsClear = (connectionID: string) => guard<void>(() => App.WSClear(connectionID))
 
 export const resolveVariables = (input: string, scopes: Record<string, string>) =>
   guard<string>(() => App.ResolveVariables(input, scopes))

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
-import { Plug, PlugZap, Send, Trash2, X } from "lucide-react"
+import { Activity, Plug, PlugZap, Search, Send, Trash2, X } from "lucide-react"
 import * as api from "@/lib/api"
 import type { WebSocketMessage } from "@/types"
 
@@ -18,7 +18,12 @@ export function WebSocketPanel() {
   const [messages, setMessages] = useState<WebSocketMessage[]>([])
   const [outgoing, setOutgoing] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [filter, setFilter] = useState("")
   const listRef = useRef<HTMLDivElement>(null)
+
+  const visibleMessages = filter.trim()
+    ? messages.filter((m) => m.data.toLowerCase().includes(filter.trim().toLowerCase()))
+    : messages
 
   useEffect(() => {
     const unsub = api.onEvent<{ connectionId: string; message: WebSocketMessage }>("ws:message", (payload) => {
@@ -77,10 +82,31 @@ export function WebSocketPanel() {
           variant="ghost"
           size="icon"
           className="h-7 w-7"
+          title="Send ping"
+          aria-label="Send ping"
+          disabled={!connection?.connected}
+          onClick={async () => {
+            if (!connection) return
+            try {
+              await api.wsPing(connection.id)
+            } catch (err) {
+              setError(api.errorMessage(err))
+            }
+          }}
+        >
+          <Activity className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
           title="Clear messages"
           aria-label="Clear messages"
           disabled={messages.length === 0}
-          onClick={() => setMessages([])}
+          onClick={() => {
+            if (connection) api.wsClear(connection.id).catch(console.error)
+            setMessages([])
+          }}
         >
           <Trash2 className="h-4 w-4" />
         </Button>
@@ -115,9 +141,17 @@ export function WebSocketPanel() {
         )}
       </div>
 
+      <div className="border-b border-border px-2 py-1.5">
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter messages…" className="h-7 pl-7 text-xs" />
+        </div>
+      </div>
+
       <div ref={listRef} className="flex-1 overflow-y-auto p-2 space-y-1 font-mono text-xs">
         {messages.length === 0 && <div className="text-muted-foreground">No messages yet.</div>}
-        {messages.map((m) => (
+        {messages.length > 0 && visibleMessages.length === 0 && <div className="text-muted-foreground">No messages match the filter.</div>}
+        {visibleMessages.map((m) => (
           <div
             key={m.id}
             className={cn(

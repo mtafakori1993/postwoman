@@ -26,6 +26,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -38,7 +39,9 @@ const maxResponseBytes = 200 * 1024 * 1024 // 200 MiB hard ceiling
 // Client performs HTTP requests. One client is shared by the app so cookies
 // persist between requests, matching Postman's cookie-jar behaviour.
 type Client struct {
-	jar *cookiejar.Jar
+	mu      sync.RWMutex
+	jar     *cookiejar.Jar
+	origins map[string]struct{}
 }
 
 func NewClient() (*Client, error) {
@@ -46,7 +49,15 @@ func NewClient() (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{jar: jar}, nil
+	return &Client{jar: jar, origins: map[string]struct{}{}}, nil
+}
+
+// jarHandle returns the current cookie jar. Reads are guarded because the jar
+// can be replaced when the user clears cookies.
+func (c *Client) jarHandle() *cookiejar.Jar {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.jar
 }
 
 // Do executes a request and always returns a populated Response. Transport
@@ -81,8 +92,10 @@ func (c *Client) Do(ctx context.Context, reqModel *model.Request, resolver *vari
 		method = "GET"
 	}
 
-	rawURL := resolver.Resolve(reqModel.URL)
-	rawURL = applyPathVariables(rawURL, reqModel.PathVariables, resolver)
+	// Resolve explicit path variables first (they win over generic variable
+	// interpolation), then run the normal {{variable}} resolver over the URL.
+	rawURL := applyPathVariables(reqModel.URL, reqModel.PathVariables, resolver)
+	rawURL = resolver.Resolve(rawURL)
 	if strings.TrimSpace(rawURL) == "" {
 		response.Error = "request URL is empty"
 		response.ResponseTime = time.Since(start).Milliseconds()
@@ -104,14 +117,31 @@ func (c *Client) Do(ctx context.Context, reqModel *model.Request, resolver *vari
 		return response, nil
 	}
 
+	// The URL and the params table are kept in sync by the UI, so blindly
+	// adding every enabled row would send duplicate parameters. Only add rows
+	// that are not already present in the URL (counting duplicates).
 	query := parsedURL.Query()
+	existing := map[string]int{}
+	for k, values := range query {
+		for _, v := range values {
+			existing[k+"\x00"+v]++
+		}
+	}
 	for _, p := range reqModel.QueryParams {
 		if !p.Enabled || strings.TrimSpace(p.Key) == "" {
 			continue
 		}
-		query.Add(resolver.Resolve(p.Key), resolver.Resolve(p.Value))
+		key := resolver.Resolve(p.Key)
+		value := resolver.Resolve(p.Value)
+		token := key + "\x00" + value
+		if existing[token] > 0 {
+			existing[token]--
+			continue
+		}
+		query.Add(key, value)
 	}
 	parsedURL.RawQuery = query.Encode()
+	c.recordOrigin(parsedURL)
 
 	bodyBytes, contentType, err := buildBody(reqModel.Body, resolver)
 	if err != nil {
@@ -128,7 +158,7 @@ func (c *Client) Do(ctx context.Context, reqModel *model.Request, resolver *vari
 	}
 
 	httpClient := &http.Client{
-		Jar:       c.jar,
+		Jar:       c.jarHandle(),
 		Transport: transport,
 		Timeout:   time.Duration(settings.Timeout) * time.Millisecond,
 		CheckRedirect: func(r *http.Request, via []*http.Request) error {
@@ -166,6 +196,12 @@ func (c *Client) Do(ctx context.Context, reqModel *model.Request, resolver *vari
 			value := resolver.Resolve(h.Value)
 			if strings.EqualFold(h.Key, "Host") {
 				httpReq.Host = value
+				continue
+			}
+			// Content-Type must be single-valued. Using Set keeps the last
+			// enabled row and prevents conflicting duplicate headers.
+			if strings.EqualFold(h.Key, "Content-Type") {
+				httpReq.Header.Set(h.Key, value)
 				continue
 			}
 			httpReq.Header.Add(h.Key, value)
@@ -259,7 +295,7 @@ func (c *Client) Do(ctx context.Context, reqModel *model.Request, resolver *vari
 		response.Error = fmt.Sprintf("response truncated at %d bytes", maxResponseBytes)
 	}
 
-	if cookies := c.jar.Cookies(parsedURL); len(cookies) > 0 {
+	if cookies := c.jarHandle().Cookies(parsedURL); len(cookies) > 0 {
 		for _, ck := range cookies {
 			response.Cookies = append(response.Cookies, toCookie(ck))
 		}
@@ -276,6 +312,8 @@ func friendlyNetworkError(err error) string {
 	msg := err.Error()
 	lower := strings.ToLower(msg)
 	switch {
+	case strings.Contains(lower, "context canceled"), strings.Contains(lower, "operation was canceled"):
+		return "request cancelled"
 	case strings.Contains(lower, "context deadline exceeded"), strings.Contains(lower, "timeout"):
 		return "request timed out"
 	case strings.Contains(lower, "connection refused"):
@@ -292,12 +330,49 @@ func friendlyNetworkError(err error) string {
 
 func applyPathVariables(rawURL string, pathVars []model.KeyValue, resolver *variables.Resolver) string {
 	for _, pv := range pathVars {
-		if !pv.Enabled || pv.Key == "" {
+		if !pv.Enabled || strings.TrimSpace(pv.Key) == "" {
 			continue
 		}
-		rawURL = strings.ReplaceAll(rawURL, ":"+pv.Key, resolver.Resolve(pv.Value))
+		value := resolver.Resolve(pv.Value)
+		if value == "" {
+			continue
+		}
+		// Support both Postman-style :id segments and {{id}} placeholders in
+		// the path. The explicit path-variable row wins over a same-named
+		// environment variable.
+		rawURL = replacePathToken(rawURL, ":"+pv.Key, value)
+		rawURL = strings.ReplaceAll(rawURL, "{{"+pv.Key+"}}", value)
 	}
 	return rawURL
+}
+
+// replacePathToken replaces occurrences of a :key segment where the token is
+// preceded by "/" (or starts the string) and followed by a path boundary.
+// This avoids corrupting "https://" or double-prefix keys such as :id/:idx.
+func replacePathToken(raw, token, value string) string {
+	if !strings.Contains(raw, token) {
+		return raw
+	}
+	var b strings.Builder
+	b.Grow(len(raw))
+	for i := 0; i < len(raw); {
+		if strings.HasPrefix(raw[i:], token) && (i == 0 || raw[i-1] == '/') {
+			end := i + len(token)
+			if end == len(raw) || !isPathKeyChar(raw[end]) {
+				b.WriteString(value)
+				i = end
+				continue
+			}
+		}
+		b.WriteByte(raw[i])
+		i++
+	}
+	return b.String()
+}
+
+func isPathKeyChar(c byte) bool {
+	return c == '_' || c == '-' || c == '.' ||
+		(c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
 func buildBody(body model.Body, resolver *variables.Resolver) ([]byte, string, error) {
@@ -618,7 +693,11 @@ func (c *Client) applyAuth(ctx context.Context, httpClient *http.Client, req *ht
 			return nil
 		}
 		if auth.OAuth2.AccessToken != "" {
-			req.Header.Set("Authorization", "Bearer "+resolver.Resolve(auth.OAuth2.AccessToken))
+			prefix := auth.OAuth2.TokenType
+			if prefix == "" {
+				prefix = "Bearer"
+			}
+			req.Header.Set("Authorization", prefix+" "+resolver.Resolve(auth.OAuth2.AccessToken))
 		}
 	case "awsv4":
 		if auth.AWSV4 == nil {
@@ -634,46 +713,43 @@ func (c *Client) applyAuth(ctx context.Context, httpClient *http.Client, req *ht
 }
 
 func (c *Client) prepareOAuth2(ctx context.Context, httpClient *http.Client, oauth *model.OAuth2Auth, resolver *variables.Resolver) error {
-	if oauth.AccessToken != "" || oauth.TokenURL == "" {
+	resolved := resolveOAuth2(*oauth, resolver)
+	expired := resolved.ExpiresAt > 0 && time.Now().UnixMilli() >= resolved.ExpiresAt
+	if resolved.AccessToken != "" && !expired {
 		return nil
 	}
-	grant := oauth.GrantType
-	if grant != "client_credentials" && grant != "password" {
+	if resolved.TokenURL == "" {
+		if resolved.AccessToken == "" {
+			return fmt.Errorf("OAuth2 access token is missing; use Authorize in the Auth tab or configure a token URL")
+		}
 		return nil
 	}
-	form := url.Values{}
-	form.Set("grant_type", grant)
-	form.Set("client_id", resolver.Resolve(oauth.ClientID))
-	form.Set("client_secret", resolver.Resolve(oauth.ClientSecret))
-	if oauth.Scope != "" {
-		form.Set("scope", resolver.Resolve(oauth.Scope))
+	// Prefer a refresh token whenever the provider issued one; otherwise use
+	// the configured grant type.
+	grant := resolved.GrantType
+	if resolved.RefreshToken != "" && grant != "client_credentials" && grant != "password" {
+		grant = "refresh_token"
 	}
-	if grant == "password" {
-		form.Set("username", resolver.Resolve(oauth.Username))
-		form.Set("password", resolver.Resolve(oauth.Password))
+	switch grant {
+	case "client_credentials", "password", "refresh_token":
+		resolved.GrantType = grant
+		updated, err := c.FetchOAuth2Token(ctx, resolved)
+		if err != nil {
+			return err
+		}
+		oauth.AccessToken = updated.AccessToken
+		if updated.RefreshToken != "" {
+			oauth.RefreshToken = updated.RefreshToken
+		}
+		oauth.TokenType = updated.TokenType
+		oauth.ExpiresAt = updated.ExpiresAt
+		return nil
+	default:
+		if resolved.AccessToken == "" {
+			return fmt.Errorf("OAuth2 authorization code flow needs an access token; use Authorize in the Auth tab")
+		}
+		return nil
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, resolver.Resolve(oauth.TokenURL), strings.NewReader(form.Encode()))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("OAuth2 token request failed: %w", err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("OAuth2 token endpoint returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-	var payload struct {
-		AccessToken string `json:"access_token"`
-	}
-	if err := json.Unmarshal(body, &payload); err != nil || payload.AccessToken == "" {
-		return fmt.Errorf("OAuth2 token endpoint did not return an access_token")
-	}
-	oauth.AccessToken = payload.AccessToken
-	return nil
 }
 
 func applyDigest(req *http.Request, digest *model.DigestAuth, challenge string, resolver *variables.Resolver) error {

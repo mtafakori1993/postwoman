@@ -100,6 +100,30 @@ func mergeSettings(base, stored model.AppSettings) model.AppSettings {
 	base.ShowResponseHeaders = stored.ShowResponseHeaders
 	base.FollowRedirects = stored.FollowRedirects
 	base.SendNoCacheHeader = stored.SendNoCacheHeader
+	base.CompactMode = stored.CompactMode
+	base.AIEnabled = stored.AIEnabled
+	if stored.AccentColor != "" {
+		base.AccentColor = stored.AccentColor
+	}
+	if stored.EditorFontFamily != "" {
+		base.EditorFontFamily = stored.EditorFontFamily
+	}
+	if stored.LayoutPreset != "" {
+		base.LayoutPreset = stored.LayoutPreset
+	}
+	if stored.AIProvider != "" {
+		base.AIProvider = stored.AIProvider
+	}
+	if stored.AIBaseURL != "" {
+		base.AIBaseURL = stored.AIBaseURL
+	}
+	if stored.AIModel != "" {
+		base.AIModel = stored.AIModel
+	}
+	// The API key is empty until the user configures the assistant; copying it
+	// unconditionally would be indistinguishable from "not set", so only an
+	// explicit non-empty value replaces the default (which is empty anyway).
+	base.AIAPIKey = stored.AIAPIKey
 	base.Proxy = stored.Proxy
 	if stored.DefaultHeaders != nil {
 		base.DefaultHeaders = stored.DefaultHeaders

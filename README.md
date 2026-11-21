@@ -31,30 +31,60 @@
 
 ## Features
 
-- **Request builder** — every HTTP method, URL, query parameters, path variables,
-  headers, and a complete request-body editor.
+- **Request builder** — every HTTP method *plus custom methods*, URL, query
+  parameters, path variables, headers, and a complete request-body editor.
+  The URL and the Params table stay synchronised both ways, and path variables
+  (`/:id` or `{{id}}`) are detected automatically with missing-value warnings.
 - **Body types** — None, Raw, JSON, XML, Text, JavaScript, HTML,
   Form Data (`multipart/form-data`, text fields and multi-file uploads),
   URL Encoded, Binary and GraphQL. Syntax highlighting, validation and
-  JSON format/minify are built in.
+  JSON format/minify are built in. GraphQL mode can introspect the endpoint
+  schema (types/fields explorer + query validation).
 - **Response viewer** — Pretty (syntax-highlighted), Raw and Preview
   (HTML, images, PDF, audio, video, XML) in one compact bottom bar, plus
-  Cookies, Headers, Tests and Console tabs.
+  Cookies, Headers, **Meta**, Tests and Console tabs. A **wrap / no-wrap
+  toggle** is available for the body views, and response headers can be copied
+  in one click.
+- **Response tools** — extract values with JSONPath and save them as
+  environment/collection/global variables, diff the current response against a
+  historical one, and generate or validate JSON Schema.
 - **Tabs** — right-click any tab for *Close*, *Close Others*, *Close to the Right*,
-  *Close All* and *Duplicate*. Unsaved changes are protected by a confirmation
-  dialog with **Save & Close**.
-- **Authentication** — Basic, Bearer, API Key, Digest, OAuth 1.0/2.0 and AWS SigV4.
-- **Collections & folders** — organise and persist your requests.
-- **Environments & variables** — global and environment scopes with
-  `{{variable}}` interpolation.
+  *Close All*, *Duplicate*, *Pin/Unpin*, *Copy Request URL* and *Reopen Closed
+  Tab*. Unsaved changes are protected by a confirmation dialog with **Save & Close**.
+- **Authentication** — Basic, Bearer, API Key, Digest, OAuth 1.0, OAuth 2.0
+  (authorization code, **authorization code + PKCE**, client credentials,
+  password, refresh token), AWS SigV4 and JWT. Auth can be set on a request, a
+  folder or a collection and **inherited** ("Inherit from parent"); JWT tokens
+  are decoded with an expiry indicator.
+- **Collections & folders** — organise and persist requests, drag-and-drop
+  requests between collections/folders, favourites and recent lists, plus
+  per-collection settings (name, description, variables, auth) and generated
+  Markdown documentation.
+- **Environments & variables** — global, collection and environment scopes with
+  `{{variable}}` interpolation, autocomplete while typing, secret masking,
+  variable inspection chips and environment duplication.
+- **Code generation** — export the current request as cURL, raw HTTP,
+  JavaScript `fetch`, Node.js, Python `requests`, Go or PHP, and import cURL
+  commands straight into an editable tab.
 - **Scripts** — pre-request and test scripts with a Postman-style `pm.*` API,
-  test results and console output.
+  edited in the CodeMirror editor, with test results and console output.
+- **Cookie manager** — inspect, add, edit and delete cookies per origin; they
+  persist between sessions.
 - **Mock servers** — define routes and serve canned responses locally.
-- **WebSocket** — connect and exchange messages interactively.
-- **History** — automatically records sent requests.
-- **Import / export** — Postman collections and environments, OpenAPI 3, HAR and
-  cURL in; Postman format out.
-- **Theming** — light, dark and system themes.
+- **WebSocket** — connect, send, ping, filter and clear messages.
+- **History** — records every sent request with search, method/status filters,
+  pinning, replay and "copy as cURL".
+- **Import / export** — Postman collections and environments, OpenAPI 3,
+  Swagger 2, HAR and cURL in (from a file or a URL); Postman format out.
+- **Command palette (`Ctrl+K`)** — search requests, collections, environments,
+  history and run actions (new request, import, layouts, theme, panels…).
+- **Personalisation** — light/dark/system themes, accent colours, editor font
+  and size, compact mode, layout presets (default, minimal, API testing, JSON
+  focus, wide response), sidebar/tab/response sizing and **customisable
+  keyboard shortcuts**.
+- **Optional AI assistant** — opt-in, OpenAI-compatible endpoint configured in
+  Settings; request/response data is only sent when you explicitly run a prompt.
+  Includes presets for explaining requests/errors, generating tests and schemas.
 
 ## Install
 
@@ -64,13 +94,13 @@ Runtime dependencies (GTK 3 and WebKitGTK 4.1) are pulled in automatically.
 
 ```bash
 # resolve dependencies automatically
-sudo apt install ./postwoman_1.1.2_amd64.deb
+sudo apt install ./postwoman_1.3.0_amd64.deb
 ```
 
 Or, on a system without `apt`:
 
 ```bash
-sudo dpkg -i postwoman_1.1.2_amd64.deb
+sudo dpkg -i postwoman_1.3.0_amd64.deb
 sudo apt-get -f install     # install any missing dependencies
 ```
 
@@ -88,14 +118,14 @@ sudo apt remove postwoman
 No installation required — a single self-contained executable:
 
 ```bash
-chmod +x Postwoman-1.1.2-x86_64.AppImage
-./Postwoman-1.1.2-x86_64.AppImage
+chmod +x Postwoman-1.3.0-x86_64.AppImage
+./Postwoman-1.3.0-x86_64.AppImage
 ```
 
 If your system lacks FUSE you can still run it:
 
 ```bash
-./Postwoman-1.1.2-x86_64.AppImage --appimage-extract-and-run
+./Postwoman-1.3.0-x86_64.AppImage --appimage-extract-and-run
 ```
 
 ## Build from source
@@ -136,10 +166,10 @@ Both installables are built from the version in `app.go`, so the artifacts alway
 match the application.
 
 ```bash
-# Debian / Ubuntu package  -> postwoman_1.1.2_amd64.deb
+# Debian / Ubuntu package  -> postwoman_1.3.0_amd64.deb
 ./packaging/debian/build-deb.sh
 
-# Portable AppImage        -> Postwoman-1.1.2-x86_64.AppImage
+# Portable AppImage        -> Postwoman-1.3.0-x86_64.AppImage
 ./packaging/appimage/build-appimage.sh
 ```
 
@@ -203,14 +233,26 @@ Tabs can be dragged to reorder and middle-clicked to close (configurable in
 
 ## Keyboard shortcuts
 
+Every shortcut can be rebound in **Settings → Keyboard shortcuts**; the table
+below lists the defaults.
+
 | Shortcut | Action |
 | --- | --- |
-| `Ctrl+B` | Toggle the sidebar |
-| `Ctrl+K` | Open search |
+| `Ctrl+Enter` | Send the current request |
+| `Ctrl+S` | Save the current request |
+| `Ctrl+L` | Focus the URL bar |
+| `Ctrl+Shift+C` | Copy the request as cURL |
+| `Ctrl+Shift+E` | Generate a code snippet |
+| `Ctrl+N` | New request tab |
 | `Ctrl+T` | New tab |
 | `Ctrl+W` | Close the current tab |
-| `Ctrl+S` | Save the current request |
-| `Ctrl+Enter` | Send the current request |
+| `Ctrl+Shift+W` | Close all (unpinned) tabs |
+| `Ctrl+Shift+T` | Reopen the last closed tab |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
+| `Ctrl+K` | Command palette |
+| `Ctrl+B` | Toggle the sidebar |
+| `Ctrl+Shift+I` | Import a cURL command |
+| `Ctrl+/` | Show the shortcut reference |
 
 ## Where your data lives
 
@@ -248,6 +290,16 @@ assets/                 Logo (PNG + base64)
 - **React 19** · **TypeScript** · **Vite 7**
 - **Tailwind CSS 3** · **Radix UI** (shadcn-style components)
 - **Zustand** · **CodeMirror 6**
+
+### Program font
+
+The UI and code editors use **Source Code Pro** (regular), bundled at
+[`frontend/src/assets/fonts/SourceCodePro-Regular.ttf`](frontend/src/assets/fonts/SourceCodePro-Regular.ttf)
+and declared in `frontend/src/index.css`. It ships with the app so the interface
+renders identically offline. Source Code Pro is released under the SIL Open Font
+License 1.1 — see
+[`frontend/src/assets/fonts/SourceCodePro-OFL.txt`](frontend/src/assets/fonts/SourceCodePro-OFL.txt).
+The editor font can still be changed in **Settings → Appearance**.
 
 ## License
 

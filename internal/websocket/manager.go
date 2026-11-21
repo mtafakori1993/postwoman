@@ -167,6 +167,32 @@ func (m *Manager) Send(id, data string, isBinary bool) (*model.WSMessage, error)
 	return &msg, nil
 }
 
+// Ping sends a WebSocket ping control frame and records a system message so
+// the UI can show the round-trip attempt.
+func (m *Manager) Ping(id string) error {
+	m.mu.Lock()
+	c, ok := m.conns[id]
+	m.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("WebSocket connection %q is not open", id)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.connected {
+		return fmt.Errorf("WebSocket connection %q is closed", id)
+	}
+	if err := c.ws.WriteControl(gws.PingMessage, []byte("ping"), time.Now().Add(5*time.Second)); err != nil {
+		return fmt.Errorf("ping failed: %w", err)
+	}
+	msg := model.WSMessage{
+		ID: uuid.New().String(), Type: "system", Data: "ping sent", Timestamp: time.Now().UnixMilli(),
+	}
+	c.messages = append(c.messages, msg)
+	if m.onEvent != nil {
+		go m.onEvent(id, msg)
+	}
+	return nil
+}
 func (m *Manager) Close(id string) error {
 	m.mu.Lock()
 	c, ok := m.conns[id]
