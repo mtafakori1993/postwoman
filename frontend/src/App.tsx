@@ -156,7 +156,7 @@ function App() {
   useEffect(() => {
     const root = document.documentElement
     applyAccent(root, settings.accentColor || "orange")
-    applyUiFont(root, settings.uiFont || "system")
+    applyUiFont(root, settings.uiFont || "open-sans")
     applyEditorFont(root, settings.editorFontFamily || "mono")
     root.classList.toggle("pw-compact", !!settings.compactMode)
   }, [settings.accentColor, settings.uiFont, settings.editorFontFamily, settings.compactMode])

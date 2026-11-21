@@ -35,7 +35,7 @@ function uid(): string {
 export function defaultSettings(): AppSettings {
   return {
     theme: "system",
-    fontSize: 16,
+    fontSize: 15,
     editorFontSize: 13,
     editorTabSize: 2,
     requestTimeout: 30000,
@@ -52,7 +52,7 @@ export function defaultSettings(): AppSettings {
     sendNoCacheHeader: false,
     accentColor: "orange",
     editorFontFamily: "mono",
-    uiFont: "system",
+    uiFont: "open-sans",
     compactMode: false,
     layoutPreset: "default",
     aiEnabled: false,

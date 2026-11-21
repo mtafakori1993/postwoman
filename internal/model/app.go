@@ -43,7 +43,7 @@ type AppSettings struct {
 func DefaultAppSettings() AppSettings {
 	return AppSettings{
 		Theme:                  "system",
-		FontSize:               16,
+		FontSize:               15,
 		EditorFontSize:         13,
 		EditorTabSize:          2,
 		RequestTimeout:         30000,
@@ -60,7 +60,7 @@ func DefaultAppSettings() AppSettings {
 		SendNoCacheHeader:      false,
 		AccentColor:            "orange",
 		EditorFontFamily:       "mono",
-		UIFont:                 "system",
+		UIFont:                 "open-sans",
 		CompactMode:            false,
 		LayoutPreset:           "default",
 		AIEnabled:              false,

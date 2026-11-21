@@ -34,21 +34,24 @@ export const EDITOR_FONT_LABELS: Record<string, string> = {
 }
 
 /**
- * Interface typefaces. The default keeps the chrome in a normal sans face
- * (clean at small sizes); Source Code Pro is available for users who prefer a
- * monospace UI.
+ * Interface typefaces. Open Sans (the bundled Bold face) is the default; the
+ * others remain available in Settings → Appearance.
  */
+export const DEFAULT_UI_FONT = "open-sans"
+
 export const UI_FONTS: Record<string, string> = {
+  "open-sans": "\"Open Sans\", Inter, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
   system: "Inter, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
   "source-code-pro": "\"Source Code Pro\", ui-monospace, \"JetBrains Mono\", \"Fira Code\", monospace",
 }
 
 export const UI_FONT_LABELS: Record<string, string> = {
-  system: "System UI (recommended)",
+  "open-sans": "Open Sans (default)",
+  system: "System UI",
   "source-code-pro": "Source Code Pro (monospace)",
 }
 
-export const UI_FONT_SIZES = { min: 11, max: 20, default: 16 }
+export const UI_FONT_SIZES = { min: 11, max: 20, default: 15 }
 export const EDITOR_FONT_SIZES = { min: 9, max: 24, default: 13 }
 
 export function clampFontSize(value: number | undefined, bounds: { min: number; max: number; default: number }): number {
@@ -70,9 +73,9 @@ export function applyEditorFont(root: HTMLElement, family: string) {
   root.style.setProperty("--pw-editor-font", EDITOR_FONTS[family] ?? EDITOR_FONTS.mono)
 }
 
-/** Apply the interface typeface (system sans by default). */
+/** Apply the interface typeface (Open Sans by default). */
 export function applyUiFont(root: HTMLElement, font: string) {
-  root.style.setProperty("--pw-ui-font", UI_FONTS[font] ?? UI_FONTS.system)
+  root.style.setProperty("--pw-ui-font", UI_FONTS[font] ?? UI_FONTS[DEFAULT_UI_FONT])
   root.dataset.uiFont = font
 }
 

@@ -166,7 +166,7 @@ export function SettingsPanel() {
           </div>
           <div className="flex items-center justify-between gap-2">
             <span>Interface font</span>
-            <Select value={settings.uiFont || "system"} onValueChange={(v) => updateSettings({ uiFont: v })}>
+            <Select value={settings.uiFont || "open-sans"} onValueChange={(v) => updateSettings({ uiFont: v })}>
               <SelectTrigger className="h-8 w-[190px]">
                 <SelectValue />
               </SelectTrigger>

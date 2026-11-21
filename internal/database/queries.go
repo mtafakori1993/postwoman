@@ -127,6 +127,17 @@ func mergeSettings(base, stored model.AppSettings) model.AppSettings {
 	// unconditionally would be indistinguishable from "not set", so only an
 	// explicit non-empty value replaces the default (which is empty anyway).
 	base.AIAPIKey = stored.AIAPIKey
+	// --- migrations for changed defaults ------------------------------------
+	// v1.3.3 changed the interface default to Open Sans at 15 px. Values that
+	// are exactly a previous default (13/16 px, "system") are treated as unset
+	// so the new default reaches existing installations, while any other value
+	// is kept as a deliberate user choice.
+	if stored.FontSize == 13 || stored.FontSize == 16 {
+		base.FontSize = 15
+	}
+	if stored.UIFont == "system" {
+		base.UIFont = "open-sans"
+	}
 	base.Proxy = stored.Proxy
 	if stored.DefaultHeaders != nil {
 		base.DefaultHeaders = stored.DefaultHeaders

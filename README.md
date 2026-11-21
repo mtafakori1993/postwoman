@@ -101,13 +101,13 @@ Runtime dependencies (GTK 3 and WebKitGTK 4.1) are pulled in automatically.
 
 ```bash
 # resolve dependencies automatically
-sudo apt install ./postwoman_1.3.2_amd64.deb
+sudo apt install ./postwoman_1.3.3_amd64.deb
 ```
 
 Or, on a system without `apt`:
 
 ```bash
-sudo dpkg -i postwoman_1.3.2_amd64.deb
+sudo dpkg -i postwoman_1.3.3_amd64.deb
 sudo apt-get -f install     # install any missing dependencies
 ```
 
@@ -125,14 +125,14 @@ sudo apt remove postwoman
 No installation required — a single self-contained executable:
 
 ```bash
-chmod +x Postwoman-1.3.2-x86_64.AppImage
-./Postwoman-1.3.2-x86_64.AppImage
+chmod +x Postwoman-1.3.3-x86_64.AppImage
+./Postwoman-1.3.3-x86_64.AppImage
 ```
 
 If your system lacks FUSE you can still run it:
 
 ```bash
-./Postwoman-1.3.2-x86_64.AppImage --appimage-extract-and-run
+./Postwoman-1.3.3-x86_64.AppImage --appimage-extract-and-run
 ```
 
 ## Build from source
@@ -173,10 +173,10 @@ Both installables are built from the version in `app.go`, so the artifacts alway
 match the application.
 
 ```bash
-# Debian / Ubuntu package  -> postwoman_1.3.2_amd64.deb
+# Debian / Ubuntu package  -> postwoman_1.3.3_amd64.deb
 ./packaging/debian/build-deb.sh
 
-# Portable AppImage        -> Postwoman-1.3.2-x86_64.AppImage
+# Portable AppImage        -> Postwoman-1.3.3-x86_64.AppImage
 ./packaging/appimage/build-appimage.sh
 ```
 

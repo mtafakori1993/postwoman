@@ -15,8 +15,30 @@
   src: local("Source Code Pro"), url("./assets/fonts/SourceCodePro-Regular.ttf") format("truetype");
 }
 
+/*
+ * Default interface font: Open Sans (Apache License 2.0), using the Bold face
+ * that ships with the app. It is registered for the normal *and* bold weights
+ * so the browser never synthesises (fake-bolds) the face — a synthetic bold on
+ * top of a bold face is what makes UI text look smeared.
+ */
+@font-face {
+  font-family: "Open Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/OpenSans-Bold.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Open Sans";
+  font-style: normal;
+  font-weight: 600 700;
+  font-display: swap;
+  src: url("./assets/fonts/OpenSans-Bold.ttf") format("truetype");
+}
+
 :root {
-  --pw-ui-font: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --pw-ui-font: "Open Sans", Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --pw-editor-font: "Source Code Pro", ui-monospace, "JetBrains Mono", "Fira Code", monospace;
   --pw-editor-font-size: 13px;
 }
