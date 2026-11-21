@@ -5,10 +5,20 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
-import { AlertTriangle, Check, Keyboard, Plus, RotateCcw, Sparkles } from "lucide-react"
+import { AlertTriangle, Check, Keyboard, Minus, Plus, RotateCcw, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useWorkspaceStore } from "@/stores/workspace"
-import { ACCENTS, ACCENT_LABELS, EDITOR_FONTS, EDITOR_FONT_LABELS } from "@/lib/appearance"
+import {
+  ACCENTS,
+  ACCENT_LABELS,
+  EDITOR_FONTS,
+  EDITOR_FONT_LABELS,
+  EDITOR_FONT_SIZES,
+  UI_FONTS,
+  UI_FONT_LABELS,
+  UI_FONT_SIZES,
+  clampFontSize,
+} from "@/lib/appearance"
 import { SHORTCUTS, comboFromEvent, findShortcutConflicts, formatCombo, resolveShortcuts } from "@/lib/shortcuts"
 
 const LAYOUT_PRESETS = ["default", "minimal", "testing", "json", "wide"]
@@ -55,7 +65,7 @@ function ShortcutRecorder() {
       )}
       {groups.map(([group, items]) => (
         <div key={group} className="space-y-0.5">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{group}</div>
+          <div className="pw-text-3xs font-semibold uppercase tracking-wide text-muted-foreground">{group}</div>
           {items.map((shortcut) => (
             <div key={shortcut.id} className="flex items-center justify-between gap-2 text-xs">
               <span className="text-muted-foreground">{shortcut.label}</span>
@@ -67,7 +77,7 @@ function ShortcutRecorder() {
                 )}
                 <button
                   className={cn(
-                    "rounded border px-1.5 py-0.5 font-mono text-[10px] hover:bg-muted",
+                    "rounded border px-1.5 py-0.5 font-mono pw-text-3xs hover:bg-muted",
                     recording === shortcut.id ? "border-primary text-primary" : "border-border",
                   )}
                   onClick={() => setRecording(shortcut.id)}
@@ -77,7 +87,7 @@ function ShortcutRecorder() {
                 </button>
                 {overrides[shortcut.id] !== undefined && (
                   <button
-                    className="text-[10px] text-muted-foreground underline"
+                    className="pw-text-3xs text-muted-foreground underline"
                     onClick={() => {
                       const next = { ...overrides }
                       delete next[shortcut.id]
@@ -155,9 +165,61 @@ export function SettingsPanel() {
             </div>
           </div>
           <div className="flex items-center justify-between gap-2">
-            <span>Editor font</span>
+            <span>Interface font</span>
+            <Select value={settings.uiFont || "system"} onValueChange={(v) => updateSettings({ uiFont: v })}>
+              <SelectTrigger className="h-8 w-[190px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.keys(UI_FONTS).map((font) => (
+                  <SelectItem key={font} value={font}>{UI_FONT_LABELS[font]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span>Interface font size</span>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                aria-label="Decrease interface font size"
+                disabled={(settings.fontSize || UI_FONT_SIZES.default) <= UI_FONT_SIZES.min}
+                onClick={() => updateSettings({ fontSize: clampFontSize((settings.fontSize || UI_FONT_SIZES.default) - 1, UI_FONT_SIZES) })}
+              >
+                <Minus className="h-3.5 w-3.5" />
+              </Button>
+              <span className="w-12 text-center font-mono text-xs" aria-live="polite">
+                {clampFontSize(settings.fontSize, UI_FONT_SIZES)} px
+              </span>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                aria-label="Increase interface font size"
+                disabled={(settings.fontSize || UI_FONT_SIZES.default) >= UI_FONT_SIZES.max}
+                onClick={() => updateSettings({ fontSize: clampFontSize((settings.fontSize || UI_FONT_SIZES.default) + 1, UI_FONT_SIZES) })}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 pw-text-2xs"
+                onClick={() => updateSettings({ fontSize: UI_FONT_SIZES.default })}
+              >
+                Reset
+              </Button>
+            </div>
+          </div>
+          <p className="pw-text-2xs text-muted-foreground">
+            Scales the whole interface ({UI_FONT_SIZES.min}–{UI_FONT_SIZES.max} px).
+          </p>
+          <div className="flex items-center justify-between gap-2">
+            <span>Code editor font</span>
             <Select value={settings.editorFontFamily || "mono"} onValueChange={(v) => updateSettings({ editorFontFamily: v })}>
-              <SelectTrigger className="h-8 w-[150px]">
+              <SelectTrigger className="h-8 w-[190px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -168,13 +230,40 @@ export function SettingsPanel() {
             </Select>
           </div>
           <div className="flex items-center justify-between gap-2">
-            <span>Editor font size</span>
-            <Input
-              type="number"
-              value={settings.editorFontSize}
-              onChange={(e) => updateSettings({ editorFontSize: parseInt(e.target.value) || 13 })}
-              className="h-8 w-[90px]"
-            />
+            <span>Code editor font size</span>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                aria-label="Decrease code editor font size"
+                disabled={(settings.editorFontSize || EDITOR_FONT_SIZES.default) <= EDITOR_FONT_SIZES.min}
+                onClick={() => updateSettings({ editorFontSize: clampFontSize((settings.editorFontSize || EDITOR_FONT_SIZES.default) - 1, EDITOR_FONT_SIZES) })}
+              >
+                <Minus className="h-3.5 w-3.5" />
+              </Button>
+              <span className="w-12 text-center font-mono text-xs" aria-live="polite">
+                {clampFontSize(settings.editorFontSize, EDITOR_FONT_SIZES)} px
+              </span>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                aria-label="Increase code editor font size"
+                disabled={(settings.editorFontSize || EDITOR_FONT_SIZES.default) >= EDITOR_FONT_SIZES.max}
+                onClick={() => updateSettings({ editorFontSize: clampFontSize((settings.editorFontSize || EDITOR_FONT_SIZES.default) + 1, EDITOR_FONT_SIZES) })}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 pw-text-2xs"
+                onClick={() => updateSettings({ editorFontSize: EDITOR_FONT_SIZES.default })}
+              >
+                Reset
+              </Button>
+            </div>
           </div>
           <label className="flex items-center justify-between gap-2 cursor-pointer">
             <span>Compact mode</span>
@@ -192,14 +281,14 @@ export function SettingsPanel() {
                 key={preset}
                 variant={settings.layoutPreset === preset ? "default" : "outline"}
                 size="sm"
-                className="h-7 text-[11px] capitalize"
+                className="h-7 pw-text-2xs capitalize"
                 onClick={() => applyLayoutPreset(preset)}
               >
                 {preset}
               </Button>
             ))}
           </div>
-          <p className="text-[11px] text-muted-foreground">Presets set the sidebar width, response height and active panel.</p>
+          <p className="pw-text-2xs text-muted-foreground">Presets set the sidebar width, response height and active panel.</p>
         </section>
 
         <Separator />
@@ -323,7 +412,7 @@ export function SettingsPanel() {
               className="mt-1 h-8 font-mono text-xs"
             />
           </div>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="pw-text-2xs text-muted-foreground">
             Data is only sent when you explicitly run a prompt from the AI assistant. Keys are stored locally with your app settings.
           </p>
         </section>

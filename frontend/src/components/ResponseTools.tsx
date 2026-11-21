@@ -228,7 +228,7 @@ export function ResponseTools({ open, onOpenChange, response, request, history }
                   <div className="divide-y divide-border/50 font-mono text-xs">
                     {diff.entries.map((entry, index) => (
                       <div key={`${entry.path}-${index}`} className="flex items-start gap-2 p-2">
-                        <span className={cn("shrink-0 rounded px-1 text-[10px] font-semibold", entry.kind === "added" && "bg-green-500/15 text-green-700 dark:text-green-400", entry.kind === "removed" && "bg-red-500/15 text-red-700 dark:text-red-400", entry.kind === "changed" && "bg-amber-500/15 text-amber-700 dark:text-amber-400")}>
+                        <span className={cn("shrink-0 rounded px-1 pw-text-3xs font-semibold", entry.kind === "added" && "bg-green-500/15 text-green-700 dark:text-green-400", entry.kind === "removed" && "bg-red-500/15 text-red-700 dark:text-red-400", entry.kind === "changed" && "bg-amber-500/15 text-amber-700 dark:text-amber-400")}>
                           {entry.kind}
                         </span>
                         <div className="min-w-0">

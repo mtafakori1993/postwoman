@@ -31,7 +31,7 @@ import (
 	"Postwoman/internal/websocket"
 )
 
-const appVersion = "1.3.0"
+const appVersion = "1.3.1"
 
 // App is the Wails-bound backend. Every exported method is callable from the
 // React frontend through the generated bindings in frontend/wailsjs/go/main.

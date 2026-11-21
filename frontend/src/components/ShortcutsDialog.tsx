@@ -31,7 +31,7 @@ export function ShortcutsDialog({ open, onOpenChange }: ShortcutsDialogProps) {
         <div className="max-h-[420px] space-y-4 overflow-y-auto">
           {groups.map(([group, items]) => (
             <div key={group} className="space-y-1">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{group}</div>
+              <div className="pw-text-2xs font-semibold uppercase tracking-wide text-muted-foreground">{group}</div>
               {items.map((shortcut) => {
                 const combo = resolved[shortcut.id]
                 return (
@@ -43,7 +43,7 @@ export function ShortcutsDialog({ open, onOpenChange }: ShortcutsDialogProps) {
                           <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
                         </span>
                       )}
-                      <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px]">{formatCombo(combo) || "unbound"}</kbd>
+                      <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono pw-text-3xs">{formatCombo(combo) || "unbound"}</kbd>
                     </span>
                   </div>
                 )

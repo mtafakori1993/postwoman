@@ -163,7 +163,7 @@ function JSONNodeComponent({
           </span>
         )}
 
-        <span className="ml-1 text-[10px] text-muted-foreground/60">{node.type}</span>
+        <span className="ml-1 pw-text-3xs text-muted-foreground/60">{node.type}</span>
 
         <div className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
           {!isComplex && (
@@ -184,7 +184,7 @@ function JSONNodeComponent({
                 {copied === "path" ? <Check className="h-3 w-3 text-green-500" /> : <CopyPlus className="h-3 w-3" />}
               </button>
               <button className="rounded p-1 text-muted-foreground hover:text-foreground" title="Copy JSON Pointer" onClick={() => copy("pointer", node.pointer)}>
-                {copied === "pointer" ? <Check className="h-3 w-3 text-green-500" /> : <span className="text-[9px] font-bold">/</span>}
+                {copied === "pointer" ? <Check className="h-3 w-3 text-green-500" /> : <span className="pw-text-4xs font-bold">/</span>}
               </button>
             </>
           )}
@@ -205,7 +205,7 @@ function JSONNodeComponent({
           ))}
           {!showAll && childCount > LAZY_LIMIT && (
             <button
-              className="px-2 py-1 text-[11px] text-primary underline"
+              className="px-2 py-1 pw-text-2xs text-primary underline"
               onClick={() => setShowAll(true)}
             >
               Show the remaining {childCount - LAZY_LIMIT} {node.type === "object" ? "keys" : "items"}
@@ -225,18 +225,18 @@ export function JSONViewer({ json, searchQuery, onCopyPath }: JSONViewerProps) {
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-1 border-b border-border bg-muted/20 px-2 py-1">
         <button
-          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 pw-text-2xs text-muted-foreground hover:bg-muted hover:text-foreground"
           onClick={() => setExpandSignal((s) => ({ mode: "expand", token: s.token + 1 }))}
         >
           <Maximize2 className="h-3 w-3" /> Expand all
         </button>
         <button
-          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 pw-text-2xs text-muted-foreground hover:bg-muted hover:text-foreground"
           onClick={() => setExpandSignal((s) => ({ mode: "collapse", token: s.token + 1 }))}
         >
           <Minimize2 className="h-3 w-3" /> Collapse all
         </button>
-        <span className="ml-auto text-[10px] text-muted-foreground">hover a value to copy its value, path or JSON Pointer</span>
+        <span className="ml-auto pw-text-3xs text-muted-foreground">hover a value to copy its value, path or JSON Pointer</span>
       </div>
       <div className="flex-1 overflow-auto p-3">
         <JSONNodeComponent node={rootNode} searchQuery={searchQuery} onCopyPath={onCopyPath} expandSignal={expandSignal} />

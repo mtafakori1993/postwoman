@@ -232,7 +232,7 @@ export function RequestEditor({
           />
           <VariableChips text={url} />
           {resolvedUrl !== url && (
-            <div className="truncate font-mono text-[11px] text-muted-foreground" title={resolvedUrl}>
+            <div className="truncate font-mono pw-text-2xs text-muted-foreground" title={resolvedUrl}>
               → {resolvedUrl}
             </div>
           )}
@@ -263,7 +263,7 @@ export function RequestEditor({
       {warnings.length > 0 && (
         <div className="flex flex-col gap-1 border-b border-amber-500/30 bg-amber-500/10 px-3 py-1.5">
           {warnings.map((warning) => (
-            <div key={warning} className="flex items-center gap-2 text-[11px] text-amber-700 dark:text-amber-400">
+            <div key={warning} className="flex items-center gap-2 pw-text-2xs text-amber-700 dark:text-amber-400">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
               {warning}
             </div>
@@ -276,22 +276,22 @@ export function RequestEditor({
         <TabsList className="p-1 bg-transparent overflow-x-auto flex-nowrap justify-start w-full">
           <TabsTrigger value="params">
             Params
-            {queryParams.length > 0 && <span className="ml-1 text-[10px] text-muted-foreground">{queryParams.length}</span>}
+            {queryParams.length > 0 && <span className="ml-1 pw-text-3xs text-muted-foreground">{queryParams.length}</span>}
           </TabsTrigger>
           <TabsTrigger value="auth">
             Auth
             {auth.type && auth.type !== "noauth" && auth.type !== "inherit" && (
-              <span className="ml-1 rounded bg-primary/15 px-1 text-[9px] font-semibold uppercase text-primary">{auth.type}</span>
+              <span className="ml-1 rounded bg-primary/15 px-1 pw-text-4xs font-semibold uppercase text-primary">{auth.type}</span>
             )}
           </TabsTrigger>
           <TabsTrigger value="headers">
             Headers
-            {headers.length > 0 && <span className="ml-1 text-[10px] text-muted-foreground">{headers.length}</span>}
+            {headers.length > 0 && <span className="ml-1 pw-text-3xs text-muted-foreground">{headers.length}</span>}
           </TabsTrigger>
           <TabsTrigger value="body">
             Body
             {body.mode && body.mode !== "none" && (
-              <span className="ml-1 rounded bg-primary/15 px-1 text-[9px] font-semibold uppercase text-primary">
+              <span className="ml-1 rounded bg-primary/15 px-1 pw-text-4xs font-semibold uppercase text-primary">
                 {body.mode === "formdata" ? "form" : body.mode === "urlencoded" ? "url" : body.mode}
               </span>
             )}
@@ -310,10 +310,10 @@ export function RequestEditor({
           <div>
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <Label className="text-xs font-medium text-muted-foreground">Query Parameters</Label>
-              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              <span className="rounded bg-muted px-1.5 py-0.5 pw-text-3xs text-muted-foreground">
                 synced with URL
               </span>
-              <Button variant="ghost" size="sm" className="ml-auto h-7 gap-1.5 text-[11px]" onClick={importParamsFromUrl} title="Re-parse the query string from the URL">
+              <Button variant="ghost" size="sm" className="ml-auto h-7 gap-1.5 pw-text-2xs" onClick={importParamsFromUrl} title="Re-parse the query string from the URL">
                 <ArrowDownUp className="h-3.5 w-3.5" />
                 Import from URL
               </Button>
@@ -336,11 +336,11 @@ export function RequestEditor({
             <div className="mb-2 flex items-center gap-2">
               <Label className="text-xs font-medium text-muted-foreground">Path Variables</Label>
               {hasPathVariables ? (
-                <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                <span className="rounded bg-muted px-1.5 py-0.5 pw-text-3xs text-muted-foreground">
                   detected in URL
                 </span>
               ) : (
-                <span className="text-[11px] text-muted-foreground">
+                <span className="pw-text-2xs text-muted-foreground">
                   Add <code>{"/:id"}</code> or <code>{"{{id}}"}</code> to the URL path and it appears here.
                 </span>
               )}
@@ -412,7 +412,7 @@ export function RequestEditor({
           <div>
             <div className="mb-1 flex items-center gap-2">
               <Label className="text-xs font-medium text-muted-foreground">Pre-request script</Label>
-              <span className="text-[11px] text-muted-foreground">runs before the request is sent</span>
+              <span className="pw-text-2xs text-muted-foreground">runs before the request is sent</span>
             </div>
             <div className="h-[200px] overflow-hidden rounded-md border border-border">
               <SyntaxEditor
@@ -433,7 +433,7 @@ export function RequestEditor({
           <div>
             <div className="mb-1 flex items-center gap-2">
               <Label className="text-xs font-medium text-muted-foreground">Test script</Label>
-              <span className="text-[11px] text-muted-foreground">runs after the response arrives</span>
+              <span className="pw-text-2xs text-muted-foreground">runs after the response arrives</span>
             </div>
             <div className="h-[200px] overflow-hidden rounded-md border border-border">
               <SyntaxEditor
@@ -450,7 +450,7 @@ export function RequestEditor({
                 minHeight="100%"
               />
             </div>
-            <p className="mt-1 text-[11px] text-muted-foreground">
+            <p className="mt-1 pw-text-2xs text-muted-foreground">
               Tests are listed in the response&apos;s Tests tab. Use <code>pm.test</code>, <code>pm.response.to.have.status</code> and the
               <code> expect(...)</code> helpers.
             </p>

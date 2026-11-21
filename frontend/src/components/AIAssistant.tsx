@@ -68,7 +68,7 @@ export function AIAssistant({ open, onOpenChange, request, response }: AIAssista
 
         <div className="flex flex-wrap gap-1.5">
           {PRESETS.map((preset) => (
-            <Button key={preset.label} variant="outline" size="sm" className="h-7 text-[11px]" disabled={!aiEnabled || busy} onClick={() => { setPrompt(preset.prompt); void send(preset.prompt) }}>
+            <Button key={preset.label} variant="outline" size="sm" className="h-7 pw-text-2xs" disabled={!aiEnabled || busy} onClick={() => { setPrompt(preset.prompt); void send(preset.prompt) }}>
               {preset.label}
             </Button>
           ))}

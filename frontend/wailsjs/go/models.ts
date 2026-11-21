@@ -104,6 +104,7 @@ export namespace model {
 	    sendNoCacheHeader: boolean;
     accentColor: string;
     editorFontFamily: string;
+    uiFont: string;
     compactMode: boolean;
     layoutPreset: string;
     aiEnabled: boolean;
@@ -137,6 +138,7 @@ export namespace model {
 	        this.sendNoCacheHeader = source["sendNoCacheHeader"];
         this.accentColor = source["accentColor"];
         this.editorFontFamily = source["editorFontFamily"];
+        this.uiFont = source["uiFont"];
         this.compactMode = source["compactMode"];
         this.layoutPreset = source["layoutPreset"];
         this.aiEnabled = source["aiEnabled"];

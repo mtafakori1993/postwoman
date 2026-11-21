@@ -232,7 +232,7 @@ export function EnvironmentsPanel() {
                 ]}
                 variableAutocomplete
               />
-              <p className="mt-1 text-[11px] text-muted-foreground">
+              <p className="mt-1 pw-text-2xs text-muted-foreground">
                 Set the type to <code>secret</code> to mask the value here and in variable suggestions.
               </p>
             </div>
@@ -244,7 +244,7 @@ export function EnvironmentsPanel() {
         <div className="border-t border-border pt-3">
           <Label className="mb-1 block text-xs font-medium text-muted-foreground">Collection Variables</Label>
           {collections.length === 0 ? (
-            <p className="text-[11px] text-muted-foreground">No collections yet.</p>
+            <p className="pw-text-2xs text-muted-foreground">No collections yet.</p>
           ) : (
             <div className="space-y-2">
               <Select value={selectedCollection?.id ?? ""} onValueChange={setSelectedCollectionId}>

@@ -121,13 +121,13 @@ export function HistoryPanel() {
             key={entry.id}
             className="group flex items-start gap-2 border-b border-border/40 px-2 py-1.5 last:border-0 hover:bg-muted/50"
           >
-            <span className={cn("mt-0.5 w-9 shrink-0 font-mono text-[10px] font-bold", entry.request?.method === "GET" ? "text-sky-500" : "text-green-600")}>
+            <span className={cn("mt-0.5 w-9 shrink-0 font-mono pw-text-3xs font-bold", entry.request?.method === "GET" ? "text-sky-500" : "text-green-600")}>
               {entry.request?.method}
             </span>
             <button className="min-w-0 flex-1 text-left" onClick={() => openHistoryEntry(entry)} title={entry.request?.url}>
               <div className="truncate text-sm">{entry.request?.name || entry.request?.url}</div>
-              <div className="truncate font-mono text-[11px] text-muted-foreground">{entry.request?.url}</div>
-              <div className="mt-0.5 flex items-center gap-2 text-[10px] text-muted-foreground">
+              <div className="truncate font-mono pw-text-2xs text-muted-foreground">{entry.request?.url}</div>
+              <div className="mt-0.5 flex items-center gap-2 pw-text-3xs text-muted-foreground">
                 <Clock className="h-3 w-3" />
                 <span>{formatTimestamp(entry.timestamp)}</span>
                 {entry.response && <span className={cn("font-mono", statusClass(entry.response.status))}>{entry.response.status}</span>}

@@ -302,7 +302,7 @@ export function BodyEditor({ body, onChange, method, headers, onHeadersChange, r
               {activeType === "formdata" ? (
                 <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md border border-input bg-muted/30 px-2 text-xs text-muted-foreground lg:w-[300px]">
                   <span className="truncate font-mono">multipart/form-data</span>
-                  <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                  <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 pw-text-3xs font-medium text-primary">
                     boundary auto
                   </span>
                 </div>
@@ -319,14 +319,14 @@ export function BodyEditor({ body, onChange, method, headers, onHeadersChange, r
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-8 shrink-0 px-2 text-[11px]"
+                      className="h-8 shrink-0 px-2 pw-text-2xs"
                       onClick={() => handleContentTypeChange("")}
                       title="Use the automatic content type"
                     >
                       Auto
                     </Button>
                   ) : (
-                    <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 pw-text-3xs font-medium text-muted-foreground">
                       Auto
                     </span>
                   )}
@@ -356,28 +356,28 @@ export function BodyEditor({ body, onChange, method, headers, onHeadersChange, r
       {isRawEditor && (
         <div className="overflow-hidden rounded-md border border-border">
           <div className="flex h-9 items-center gap-2 border-b border-border bg-muted/30 px-2.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <span className="pw-text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
               {activeType === "raw" ? "Plain text" : activeType}
             </span>
             {validationError ? (
-              <span className="flex items-center gap-1 text-[11px] text-destructive">
+              <span className="flex items-center gap-1 pw-text-2xs text-destructive">
                 <AlertCircle className="h-3 w-3" /> Invalid
               </span>
             ) : rawText.trim() ? (
-              <span className="flex items-center gap-1 text-[11px] text-green-600 dark:text-green-400">
+              <span className="flex items-center gap-1 pw-text-2xs text-green-600 dark:text-green-400">
                 <CheckCircle2 className="h-3 w-3" /> Valid
               </span>
             ) : null}
 
             <div className="ml-auto flex items-center gap-1">
-              <span className="hidden text-[11px] text-muted-foreground sm:inline">
+              <span className="hidden pw-text-2xs text-muted-foreground sm:inline">
                 {rawText.length.toLocaleString()} chars
               </span>
               {canFormat && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 gap-1.5 px-2 text-[11px]"
+                  className="h-7 gap-1.5 px-2 pw-text-2xs"
                   onClick={handleFormat}
                   title="Format body"
                 >
@@ -389,7 +389,7 @@ export function BodyEditor({ body, onChange, method, headers, onHeadersChange, r
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 gap-1.5 px-2 text-[11px]"
+                  className="h-7 gap-1.5 px-2 pw-text-2xs"
                   onClick={handleMinify}
                   title="Minify body"
                 >
@@ -410,7 +410,7 @@ export function BodyEditor({ body, onChange, method, headers, onHeadersChange, r
             />
           </div>
           {(validationError || formatError) && (
-            <div className="flex items-start gap-2 border-t border-destructive/20 bg-destructive/5 px-2.5 py-1.5 text-[11px] text-destructive">
+            <div className="flex items-start gap-2 border-t border-destructive/20 bg-destructive/5 px-2.5 py-1.5 pw-text-2xs text-destructive">
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span className="break-all font-mono">{formatError || validationError}</span>
             </div>
@@ -439,7 +439,7 @@ export function BodyEditor({ body, onChange, method, headers, onHeadersChange, r
             }
             emptyMessage="No form fields yet. Add a text field or a file."
           />
-          <p className="text-[11px] text-muted-foreground">
+          <p className="pw-text-2xs text-muted-foreground">
             File fields can be repeated with the same key to upload multiple files.
           </p>
           {bodyError && <InlineError message={bodyError} onClose={() => setBodyError(null)} />}
@@ -467,20 +467,20 @@ export function BodyEditor({ body, onChange, method, headers, onHeadersChange, r
               {schemaBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               Introspect schema
             </Button>
-            {schemaTypes.length > 0 && <span className="text-[11px] text-muted-foreground">{schemaTypes.length} types loaded</span>}
+            {schemaTypes.length > 0 && <span className="pw-text-2xs text-muted-foreground">{schemaTypes.length} types loaded</span>}
             {graphqlIssue ? (
-              <span className="flex items-center gap-1 text-[11px] text-destructive">
+              <span className="flex items-center gap-1 pw-text-2xs text-destructive">
                 <AlertCircle className="h-3 w-3" /> {graphqlIssue}
               </span>
             ) : graphqlQuery.trim() ? (
-              <span className="flex items-center gap-1 text-[11px] text-green-600 dark:text-green-400">
+              <span className="flex items-center gap-1 pw-text-2xs text-green-600 dark:text-green-400">
                 <CheckCircle2 className="h-3 w-3" /> Query looks valid
               </span>
             ) : null}
           </div>
 
           <div className="overflow-hidden rounded-md border border-border">
-            <div className="border-b border-border bg-muted/30 px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Query</div>
+            <div className="border-b border-border bg-muted/30 px-2.5 py-1.5 pw-text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Query</div>
             <div style={{ height: "clamp(160px, 30vh, 360px)" }}>
               <SyntaxEditor
                 value={graphqlQuery}
@@ -494,7 +494,7 @@ export function BodyEditor({ body, onChange, method, headers, onHeadersChange, r
           </div>
 
           <div className="overflow-hidden rounded-md border border-border">
-            <div className="border-b border-border bg-muted/30 px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Variables</div>
+            <div className="border-b border-border bg-muted/30 px-2.5 py-1.5 pw-text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Variables</div>
             <div style={{ height: "140px" }}>
               <SyntaxEditor
                 value={graphqlVariables}
@@ -516,7 +516,7 @@ export function BodyEditor({ body, onChange, method, headers, onHeadersChange, r
             <div className="overflow-hidden rounded-md border border-border">
               <button
                 type="button"
-                className="flex w-full items-center gap-2 border-b border-border bg-muted/30 px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+                className="flex w-full items-center gap-2 border-b border-border bg-muted/30 px-2.5 py-1.5 pw-text-2xs font-semibold uppercase tracking-wide text-muted-foreground"
                 onClick={() => setSchemaOpen((v) => !v)}
               >
                 {schemaOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
@@ -533,12 +533,12 @@ export function BodyEditor({ body, onChange, method, headers, onHeadersChange, r
                       >
                         {openType === type.name ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                         <span className="font-mono font-medium">{type.name}</span>
-                        <span className="ml-auto rounded bg-muted px-1 text-[10px] text-muted-foreground">
+                        <span className="ml-auto rounded bg-muted px-1 pw-text-3xs text-muted-foreground">
                           {type.kind.replace(/_/g, " ").toLowerCase()}
                         </span>
                       </button>
                       {openType === type.name && (
-                        <div className="bg-muted/10 px-6 py-1.5 font-mono text-[11px]">
+                        <div className="bg-muted/10 px-6 py-1.5 font-mono pw-text-2xs">
                           {type.description && <p className="mb-1 text-muted-foreground italic">{type.description}</p>}
                           {type.fields.map((field) => (
                             <div key={field.name} className="flex gap-2">
@@ -583,7 +583,7 @@ export function BodyEditor({ body, onChange, method, headers, onHeadersChange, r
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{body.fileName || "Selected file"}</p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="pw-text-2xs text-muted-foreground">
                   {binaryMeta && binaryMeta.name === body.fileName ? `${formatBytes(binaryMeta.size)} · ` : ""}Binary payload
                 </p>
               </div>
@@ -624,7 +624,7 @@ function InlineError({
   return (
     <div
       className={cn(
-        "flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-1.5 text-[11px] text-destructive",
+        "flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-1.5 pw-text-2xs text-destructive",
         className,
       )}
     >

@@ -84,7 +84,7 @@ export function KeyValueEditor({
       <div className="overflow-x-auto">
         <div className="min-w-[640px]">
           {/* Header */}
-          <div className="flex items-center bg-muted/50 border-b border-border px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="flex items-center bg-muted/50 border-b border-border px-2 py-1.5 pw-text-2xs font-medium uppercase tracking-wide text-muted-foreground">
             {columns.map((col) => (
               <div
                 key={col.key}
@@ -236,7 +236,7 @@ export function KeyValueEditor({
             <Button variant="ghost" size="sm" onClick={() => setBulkOpen(false)}>
               Cancel
             </Button>
-            <span className="text-[11px] text-muted-foreground">Use `key: value` or `key=value` per line.</span>
+            <span className="pw-text-2xs text-muted-foreground">Use `key: value` or `key=value` per line.</span>
           </div>
         </div>
       )}

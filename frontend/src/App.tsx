@@ -24,7 +24,7 @@ import {
 import { Button } from "./components/ui/button"
 import type { AuthConfig, Request } from "./types"
 import { comboMatches, resolveShortcuts } from "./lib/shortcuts"
-import { applyAccent, applyEditorFont } from "./lib/appearance"
+import { applyAccent, applyEditorFont, applyEditorFontSize, applyUiFont, applyUiFontSize } from "./lib/appearance"
 import { useVariableScopes } from "./lib/variables"
 
 function App() {
@@ -156,10 +156,22 @@ function App() {
   useEffect(() => {
     const root = document.documentElement
     applyAccent(root, settings.accentColor || "orange")
+    applyUiFont(root, settings.uiFont || "system")
     applyEditorFont(root, settings.editorFontFamily || "mono")
     root.classList.toggle("pw-compact", !!settings.compactMode)
-    if (settings.fontSize) root.style.fontSize = `${settings.fontSize}px`
-  }, [settings.accentColor, settings.editorFontFamily, settings.compactMode, settings.fontSize])
+  }, [settings.accentColor, settings.uiFont, settings.editorFontFamily, settings.compactMode])
+
+  // App-wide text scale: Tailwind sizes are rem-based, so the root font size
+  // scales the whole interface (labels, buttons, tables, dialogs).
+  useEffect(() => {
+    applyUiFontSize(document.documentElement, settings.fontSize)
+  }, [settings.fontSize])
+
+  // Code editors: applied via a CSS variable as well as the CodeMirror theme so
+  // changes take effect immediately, including in read-only editors.
+  useEffect(() => {
+    applyEditorFontSize(document.documentElement, settings.editorFontSize)
+  }, [settings.editorFontSize])
 
   const handleNewTab = useCallback(() => {
     newTab(newRequestDraft())

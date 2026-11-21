@@ -359,7 +359,7 @@ function ResponseMeta({
               </div>
             ))}
           </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">
+          <p className="mt-1 pw-text-2xs text-muted-foreground">
             A detailed DNS/TCP/TLS timing breakdown is only available when the networking stack exposes it; this build reports
             total response time.
           </p>

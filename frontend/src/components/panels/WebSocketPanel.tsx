@@ -134,7 +134,7 @@ export function WebSocketPanel() {
         </div>
         {error && <div className="text-xs text-destructive">{error}</div>}
         {connection && (
-          <div className="text-[11px] text-muted-foreground flex items-center gap-1">
+          <div className="pw-text-2xs text-muted-foreground flex items-center gap-1">
             <span className={cn("h-2 w-2 rounded-full", connection.connected ? "bg-green-500" : "bg-muted-foreground")} />
             {connection.connected ? "Connected" : "Disconnected"}
           </div>

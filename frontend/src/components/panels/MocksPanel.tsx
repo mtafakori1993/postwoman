@@ -134,11 +134,11 @@ export function MocksPanel() {
             )}
             onClick={() => setSelectedId(server.id)}
           >
-            <Badge variant={server.isRunning ? "default" : "secondary"} className="text-[10px] px-1.5 py-0">
+            <Badge variant={server.isRunning ? "default" : "secondary"} className="pw-text-3xs px-1.5 py-0">
               {server.isRunning ? "live" : "off"}
             </Badge>
             <span className="flex-1 text-sm truncate">{server.name}</span>
-            <span className="text-[11px] text-muted-foreground font-mono">:{server.port}</span>
+            <span className="pw-text-2xs text-muted-foreground font-mono">:{server.port}</span>
             <Button
               variant="ghost"
               size="icon"

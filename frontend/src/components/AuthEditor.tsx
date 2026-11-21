@@ -99,7 +99,7 @@ function JWTPreview({ token }: { token: string }) {
     <div className="space-y-1 rounded-md border border-border bg-muted/20 p-2 text-xs">
       <div className="flex items-center gap-2">
         <span className="font-semibold">JWT decoded</span>
-        <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-medium", info.expired ? "bg-destructive/15 text-destructive" : "bg-green-500/15 text-green-700 dark:text-green-400")}>
+        <span className={cn("rounded px-1.5 py-0.5 pw-text-3xs font-medium", info.expired ? "bg-destructive/15 text-destructive" : "bg-green-500/15 text-green-700 dark:text-green-400")}>
           {info.expired ? "expired" : "active"}
         </span>
         <span className="ml-auto text-muted-foreground" title={formatJWTExpiry(info)}>
@@ -107,7 +107,7 @@ function JWTPreview({ token }: { token: string }) {
         </span>
       </div>
       {info.subject && <div className="text-muted-foreground">sub: {info.subject}</div>}
-      <pre className="max-h-32 overflow-auto rounded bg-background p-2 font-mono text-[11px]">{JSON.stringify(info.payload, null, 2)}</pre>
+      <pre className="max-h-32 overflow-auto rounded bg-background p-2 font-mono pw-text-2xs">{JSON.stringify(info.payload, null, 2)}</pre>
     </div>
   )
 }
@@ -240,7 +240,7 @@ function OAuth2Panel({
           <Trash2 className="h-3.5 w-3.5" />
           Clear tokens
         </Button>
-        <span className={cn("ml-auto flex items-center gap-1 text-[11px]", expired ? "text-destructive" : "text-muted-foreground")}>
+        <span className={cn("ml-auto flex items-center gap-1 pw-text-2xs", expired ? "text-destructive" : "text-muted-foreground")}>
           {oauth.accessToken ? (
             <>
               <CheckCircle2 className="h-3 w-3" />
@@ -267,7 +267,7 @@ function OAuth2Panel({
       )}
 
       {(error || message) && (
-        <div className={cn("rounded-md border px-2.5 py-1.5 text-[11px]", error ? "border-destructive/30 bg-destructive/5 text-destructive" : "border-border bg-muted/30 text-muted-foreground")}>
+        <div className={cn("rounded-md border px-2.5 py-1.5 pw-text-2xs", error ? "border-destructive/30 bg-destructive/5 text-destructive" : "border-border bg-muted/30 text-muted-foreground")}>
           {error || message}
         </div>
       )}
@@ -281,7 +281,7 @@ function TokenField({ label, value, onChange, placeholder }: { label: string; va
     <div className="space-y-1">
       <div className="flex items-center gap-2">
         <Label className="text-xs">{label}</Label>
-        <button type="button" className="text-[11px] text-muted-foreground underline" onClick={() => setReveal((v) => !v)}>
+        <button type="button" className="pw-text-2xs text-muted-foreground underline" onClick={() => setReveal((v) => !v)}>
           {reveal ? "hide" : "reveal"}
         </button>
       </div>
@@ -360,7 +360,7 @@ export function AuthEditor({ auth, onChange, inheritedAuth, inheritedSource, req
               <Input placeholder="Username" value={auth.digest?.username || ""} onChange={(e) => onChange({ ...auth, digest: mergeAuth(auth.digest, { username: e.target.value }) })} />
               <Input type="password" placeholder="Password" value={auth.digest?.password || ""} onChange={(e) => onChange({ ...auth, digest: mergeAuth(auth.digest, { password: e.target.value }) })} />
             </div>
-            <p className="text-[11px] text-muted-foreground">Realm and nonce are read from the server challenge automatically.</p>
+            <p className="pw-text-2xs text-muted-foreground">Realm and nonce are read from the server challenge automatically.</p>
           </div>
         )
       case "oauth1":
@@ -469,7 +469,7 @@ export function AuthEditor({ auth, onChange, inheritedAuth, inheritedSource, req
                     <div className="font-medium">
                       {type.label}
                       {type.value === "inherit" && inheritedLabel && (
-                        <span className="ml-1 text-[10px] text-muted-foreground">({inheritedAuth?.type})</span>
+                        <span className="ml-1 pw-text-3xs text-muted-foreground">({inheritedAuth?.type})</span>
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground">{type.description}</div>

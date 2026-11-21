@@ -137,7 +137,7 @@ export function VariableInput({ value, onChange, variables, allowVariables = tru
               <span className="ml-auto truncate font-mono text-muted-foreground">
                 {variable.secret ? maskValue(variable.value) : variable.value || "—"}
               </span>
-              <span className="shrink-0 rounded bg-muted px-1 text-[10px] uppercase text-muted-foreground">
+              <span className="shrink-0 rounded bg-muted px-1 pw-text-3xs uppercase text-muted-foreground">
                 {variable.scope.slice(0, 3)}
               </span>
             </button>
@@ -188,7 +188,7 @@ export function VariableChips({ text, className }: VariableChipsProps) {
                 : `${variable!.scope} · {{${name}}} = ${secret ? "secret" : variable!.value}`
             }
             className={cn(
-              "inline-flex max-w-full items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[11px]",
+              "inline-flex max-w-full items-center gap-1 rounded border px-1.5 py-0.5 font-mono pw-text-2xs",
               missing
                 ? "border-destructive/40 bg-destructive/10 text-destructive"
                 : "border-border bg-muted/40 text-muted-foreground",
@@ -200,7 +200,7 @@ export function VariableChips({ text, className }: VariableChipsProps) {
             {secret && !missing && (
               <button
                 type="button"
-                className="shrink-0 text-[10px] underline"
+                className="shrink-0 pw-text-3xs underline"
                 onClick={() => setRevealed((current) => (current === name ? null : name))}
               >
                 {revealed === name ? "hide" : "reveal"}

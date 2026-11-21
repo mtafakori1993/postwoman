@@ -182,7 +182,7 @@ export function CommandPalette({ open, onOpenChange, onNewRequest, onImport, onI
           {flat.length === 0 && <div className="px-4 py-6 text-center text-sm text-muted-foreground">No matches</div>}
           {grouped.map(([group, groupItems]) => (
             <div key={group}>
-              <div className="px-3 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{group}</div>
+              <div className="px-3 pb-0.5 pt-2 pw-text-3xs font-semibold uppercase tracking-wide text-muted-foreground">{group}</div>
               {groupItems.map((item) => {
                 const index = flat.indexOf(item)
                 const Icon = item.icon
@@ -195,7 +195,7 @@ export function CommandPalette({ open, onOpenChange, onNewRequest, onImport, onI
                   >
                     <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                     <span className="min-w-0 flex-1 truncate text-sm">{item.label}</span>
-                    {item.hint && <span className="max-w-[45%] shrink-0 truncate font-mono text-[10px] text-muted-foreground">{item.hint}</span>}
+                    {item.hint && <span className="max-w-[45%] shrink-0 truncate font-mono pw-text-3xs text-muted-foreground">{item.hint}</span>}
                   </button>
                 )
               })}

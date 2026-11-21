@@ -94,13 +94,13 @@ export function CookieManagerPanel() {
         )}
         {grouped.map(([origin, entries]) => (
           <div key={origin}>
-            <div className="sticky top-0 bg-muted/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{origin}</div>
+            <div className="sticky top-0 bg-muted/60 px-2 py-1 pw-text-3xs font-semibold uppercase tracking-wide text-muted-foreground">{origin}</div>
             {entries.map((entry) => (
               <div key={`${entry.url}-${entry.cookie.name}-${entry.cookie.path ?? ""}`} className="group flex items-center gap-2 border-b border-border/40 px-2 py-1.5">
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm">{entry.cookie.name}</div>
-                  <div className="truncate font-mono text-[11px] text-muted-foreground">{entry.cookie.value}</div>
-                  <div className="flex gap-2 text-[10px] text-muted-foreground">
+                  <div className="truncate font-mono pw-text-2xs text-muted-foreground">{entry.cookie.value}</div>
+                  <div className="flex gap-2 pw-text-3xs text-muted-foreground">
                     <span>{entry.cookie.path || "/"}</span>
                     {entry.cookie.secure && <span>secure</span>}
                     {entry.cookie.httpOnly && <span>httpOnly</span>}

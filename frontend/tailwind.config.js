@@ -54,7 +54,7 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ["Source Code Pro", "ui-monospace", "JetBrains Mono", "Fira Code", "system-ui", "sans-serif"],
+        sans: ["Inter", "system-ui", "-apple-system", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"],
         mono: ["Source Code Pro", "JetBrains Mono", "Fira Code", "ui-monospace", "monospace"],
       },
       keyframes: {

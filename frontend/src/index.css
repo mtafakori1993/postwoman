@@ -16,7 +16,9 @@
 }
 
 :root {
-  --pw-ui-font: "Source Code Pro", ui-monospace, "JetBrains Mono", "Fira Code", monospace;
+  --pw-ui-font: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --pw-editor-font: "Source Code Pro", ui-monospace, "JetBrains Mono", "Fira Code", monospace;
+  --pw-editor-font-size: 13px;
 }
 
 @layer base {
@@ -266,6 +268,10 @@
   --pw-editor-font: "Source Code Pro", ui-monospace, "JetBrains Mono", "Fira Code", monospace;
 }
 
+.pw-syntax-editor .cm-editor {
+  font-size: var(--pw-editor-font-size, 13px);
+}
+
 .pw-syntax-editor .cm-content,
 .pw-syntax-editor .cm-gutters {
   font-family: var(--pw-editor-font);
@@ -297,4 +303,20 @@
 .pw-focus-ring:focus-visible {
   outline: none;
   box-shadow: 0 0 0 1px hsl(var(--ring));
+}
+
+/* Small-label sizes expressed in rem so they follow the interface font size
+   (Settings → Appearance → Interface font size). Prefixed to avoid clashing
+   with Tailwind's text-* colour utilities during class merging. */
+.pw-text-2xs {
+  font-size: 0.6875rem;
+  line-height: 1rem;
+}
+.pw-text-3xs {
+  font-size: 0.625rem;
+  line-height: 0.9375rem;
+}
+.pw-text-4xs {
+  font-size: 0.5625rem;
+  line-height: 0.875rem;
 }

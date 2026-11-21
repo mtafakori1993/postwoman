@@ -149,7 +149,7 @@ export function RequestTabs({
                 >
                   {tab.pinned && <Pin className="h-3 w-3 shrink-0 text-primary" aria-label="Pinned tab" />}
                   {tab.request && (
-                    <span className={cn("font-mono text-[10px] font-bold shrink-0", methodColor(tab.request.method))}>
+                    <span className={cn("font-mono pw-text-3xs font-bold shrink-0", methodColor(tab.request.method))}>
                       {tab.request.method}
                     </span>
                   )}

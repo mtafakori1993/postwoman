@@ -102,7 +102,7 @@ function MethodDot({ method }: { method: string }) {
           : method === "DELETE"
             ? "text-red-500"
             : "text-muted-foreground"
-  return <span className={cn("font-mono text-[10px] font-bold w-9 shrink-0", color)}>{method}</span>
+  return <span className={cn("font-mono pw-text-3xs font-bold w-9 shrink-0", color)}>{method}</span>
 }
 
 function RequestRow({
@@ -423,7 +423,7 @@ export function CollectionsPanel() {
           <div className="border-b border-border/60 pb-1">
             {favoriteRequestIds.length > 0 && (
               <>
-                <div className="px-3 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Favourites</div>
+                <div className="px-3 pt-2 pw-text-3xs font-semibold uppercase tracking-wide text-muted-foreground">Favourites</div>
                 {favoriteRequestIds
                   .map((id) => requests.find((r) => r.id === id))
                   .filter((r): r is Request => Boolean(r))
@@ -434,7 +434,7 @@ export function CollectionsPanel() {
             )}
             {recentRequestIds.length > 0 && (
               <>
-                <div className="px-3 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Recent</div>
+                <div className="px-3 pt-2 pw-text-3xs font-semibold uppercase tracking-wide text-muted-foreground">Recent</div>
                 {recentRequestIds
                   .slice(0, 5)
                   .map((id) => requests.find((r) => r.id === id))
@@ -494,7 +494,7 @@ export function CollectionsPanel() {
                 >
                   <span className="block truncate text-sm font-semibold">{collection.info.name}</span>
                   {collection.info.description && (
-                    <span className="block truncate text-[10px] text-muted-foreground">{collection.info.description}</span>
+                    <span className="block truncate pw-text-3xs text-muted-foreground">{collection.info.description}</span>
                   )}
                 </span>
               )}

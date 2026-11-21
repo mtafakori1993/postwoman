@@ -25,8 +25,11 @@ type AppSettings struct {
 	// Personalisation
 	AccentColor      string `json:"accentColor"`
 	EditorFontFamily string `json:"editorFontFamily"`
-	CompactMode      bool   `json:"compactMode"`
-	LayoutPreset     string `json:"layoutPreset"`
+	// UIFont selects the interface typeface: "system" (sans, default) or
+	// "source-code-pro" (bundled monospace).
+	UIFont       string `json:"uiFont"`
+	CompactMode  bool   `json:"compactMode"`
+	LayoutPreset string `json:"layoutPreset"`
 
 	// Optional AI assistant (OpenAI-compatible chat-completions endpoint).
 	AIEnabled  bool   `json:"aiEnabled"`
@@ -40,7 +43,7 @@ type AppSettings struct {
 func DefaultAppSettings() AppSettings {
 	return AppSettings{
 		Theme:                  "system",
-		FontSize:               13,
+		FontSize:               16,
 		EditorFontSize:         13,
 		EditorTabSize:          2,
 		RequestTimeout:         30000,
@@ -57,6 +60,7 @@ func DefaultAppSettings() AppSettings {
 		SendNoCacheHeader:      false,
 		AccentColor:            "orange",
 		EditorFontFamily:       "mono",
+		UIFont:                 "system",
 		CompactMode:            false,
 		LayoutPreset:           "default",
 		AIEnabled:              false,

@@ -108,6 +108,9 @@ func mergeSettings(base, stored model.AppSettings) model.AppSettings {
 	if stored.EditorFontFamily != "" {
 		base.EditorFontFamily = stored.EditorFontFamily
 	}
+	if stored.UIFont != "" {
+		base.UIFont = stored.UIFont
+	}
 	if stored.LayoutPreset != "" {
 		base.LayoutPreset = stored.LayoutPreset
 	}

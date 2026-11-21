@@ -128,7 +128,7 @@ export function CollectionSettingsDialog({ open, onOpenChange, collection }: Col
               ]}
               emptyMessage="No collection variables yet."
             />
-            <p className="mt-2 text-[11px] text-muted-foreground">
+            <p className="mt-2 pw-text-2xs text-muted-foreground">
               Rows with type <code>secret</code> are masked in the UI and excluded from exports where possible.
             </p>
           </TabsContent>
@@ -141,7 +141,7 @@ export function CollectionSettingsDialog({ open, onOpenChange, collection }: Col
                 setDirty(true)
               }}
             />
-            <p className="mt-2 text-[11px] text-muted-foreground">
+            <p className="mt-2 pw-text-2xs text-muted-foreground">
               Requests whose auth type is “Inherit from parent” use this configuration (folders take precedence over the collection).
             </p>
           </TabsContent>
