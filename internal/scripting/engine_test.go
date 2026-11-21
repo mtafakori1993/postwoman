@@ -13,7 +13,7 @@ func TestPassingAndFailingTests(t *testing.T) {
 	engine := newEngine()
 	ctx := &Context{
 		Request:     model.Request{URL: "https://example.com"},
-		Response:    &model.Response{Status: 200, StatusText: "OK", Body: `{"ok":true,"n":5}`},
+		Response:    &model.Response{StatusCode: 200, StatusText: "OK", Body: `{"ok":true,"n":5}`},
 		Environment: map[string]string{},
 		Globals:     map[string]string{},
 	}

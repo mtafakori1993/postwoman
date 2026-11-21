@@ -50,11 +50,15 @@ func (r *Resolver) Value(key string) (string, bool) {
 	if strings.HasPrefix(key, "$") {
 		r.mu.Lock()
 		v, ok := r.dynamic[key]
-		if !ok {
-			v = r.generate(key)
-			r.dynamic[key] = v
-		}
 		r.mu.Unlock()
+		if !ok {
+			// generate() takes r.mu internally (via intn), so it must run
+			// without the lock held to avoid a self-deadlock.
+			v = r.generate(key)
+			r.mu.Lock()
+			r.dynamic[key] = v
+			r.mu.Unlock()
+		}
 		return v, v != ""
 	}
 	for _, s := range r.scopes {

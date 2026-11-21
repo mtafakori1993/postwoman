@@ -39,6 +39,17 @@ type App struct {
 	wsManager     *websocket.Manager
 	mockManager   *mockserver.Manager
 	workspaceID   string
+	wailsReady    bool
+}
+
+// emit forwards an event to the frontend, but only when running inside the
+// Wails runtime. Outside it (e.g. in tests) emitting would call log.Fatalf, so
+// the call is skipped instead.
+func (a *App) emit(eventName string, data ...interface{}) {
+	if !a.wailsReady || a.ctx == nil {
+		return
+	}
+	wailsRuntime.EventsEmit(a.ctx, eventName, data...)
 }
 
 func NewApp() *App {
@@ -66,7 +77,7 @@ func (a *App) startup(ctx context.Context) {
 	a.scriptEngine = scripting.NewEngine(10 * time.Second)
 	a.collectionMgr = collections.NewManager(a.repo)
 	a.wsManager = websocket.NewManager(func(connID string, msg model.WSMessage) {
-		wailsRuntime.EventsEmit(ctx, "ws:message", map[string]interface{}{
+		a.emit("ws:message", map[string]interface{}{
 			"connectionId": connID,
 			"message":      msg,
 		})
@@ -80,7 +91,8 @@ func (a *App) startup(ctx context.Context) {
 		a.workspaceID = ws.ID
 	}
 
-	wailsRuntime.EventsEmit(ctx, "backend:ready", map[string]string{"workspaceId": a.workspaceID, "version": appVersion})
+	a.wailsReady = true
+	a.emit("backend:ready", map[string]string{"workspaceId": a.workspaceID, "version": appVersion})
 }
 
 func (a *App) shutdown(ctx context.Context) {
@@ -197,6 +209,37 @@ func (a *App) SendRequest(request model.Request, environment, globals, collectio
 	collVars := copyMap(collectionVars)
 	local := map[string]string{}
 
+	// The UI sends only the active environment id, so load the persisted
+	// variables server-side. This is also what makes {{baseUrl}}-style
+	// collection variables resolve for requests sent from the editor.
+	if len(env) == 0 && environmentID != "" {
+		if stored, err := a.repo.GetEnvironment(ctx, environmentID); err == nil && stored != nil {
+			for _, v := range stored.Values {
+				if v.Enabled {
+					env[v.Key] = v.Value
+				}
+			}
+		}
+	}
+	if len(collVars) == 0 && request.CollectionID != "" {
+		if coll, err := a.repo.GetCollection(ctx, request.CollectionID); err == nil && coll != nil {
+			for _, v := range coll.Variables {
+				if v.Enabled {
+					collVars[v.Key] = v.Value
+				}
+			}
+		}
+	}
+	if len(glob) == 0 {
+		if gvars, err := a.repo.ListGlobalVariables(ctx); err == nil {
+			for _, v := range gvars {
+				if v.Enabled {
+					glob[v.Key] = v.Value
+				}
+			}
+		}
+	}
+
 	// Apply global defaults where the request did not specify them.
 	if request.Settings.Timeout <= 0 {
 		request.Settings.Timeout = settings.RequestTimeout
@@ -306,7 +349,7 @@ func (a *App) SendRequest(request model.Request, environment, globals, collectio
 	if _, err := a.repo.AddHistoryEntry(ctx, redacted, result, result.ResponseTime); err != nil {
 		log.Warn().Err(err).Msg("failed to write history entry")
 	} else {
-		wailsRuntime.EventsEmit(ctx, "history:updated", nil)
+		a.emit("history:updated", nil)
 	}
 	if settings.HistoryRetentionDays > 0 {
 		_ = a.repo.TrimHistory(ctx, 5000)
@@ -393,7 +436,7 @@ func (a *App) CreateCollection(workspaceID, name, description string) (*model.Co
 	if err != nil {
 		return nil, err
 	}
-	wailsRuntime.EventsEmit(a.ctx, "collections:updated", nil)
+	a.emit("collections:updated", nil)
 	return c, nil
 }
 
@@ -408,7 +451,7 @@ func (a *App) DeleteCollection(id string) error {
 	if err := a.repo.DeleteCollection(a.ctx, id); err != nil {
 		return err
 	}
-	wailsRuntime.EventsEmit(a.ctx, "collections:updated", nil)
+	a.emit("collections:updated", nil)
 	return nil
 }
 
@@ -548,7 +591,7 @@ func (a *App) ImportCollection(workspaceID, content string) (*model.ImportSummar
 	if err != nil {
 		return nil, err
 	}
-	wailsRuntime.EventsEmit(a.ctx, "collections:updated", nil)
+	a.emit("collections:updated", nil)
 	return summary, nil
 }
 
@@ -1140,7 +1183,7 @@ func (a *App) CopyToClipboard(text string) error {
 }
 
 func (a *App) ShowNotification(title, message string) {
-	wailsRuntime.EventsEmit(a.ctx, "notification", map[string]string{"title": title, "message": message})
+	a.emit("notification", map[string]string{"title": title, "message": message})
 }
 
 func (a *App) OpenExternalURL(url string) {

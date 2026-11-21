@@ -6,16 +6,30 @@ import (
 )
 
 func TestResolveScopePrecedence(t *testing.T) {
+	// Scopes are ordered highest priority first (local, environment,
+	// collection, globals) — matching how the request path builds them.
 	r := New(
-		map[string]string{"host": "global.example.com", "shared": "global"},
-		map[string]string{"shared": "collection", "token": "col-token"},
+		map[string]string{"shared": "local", "token": "local-token"},
 		map[string]string{"shared": "environment", "token": "env-token"},
-		map[string]string{"shared": "local"},
+		map[string]string{"shared": "collection"},
+		map[string]string{"shared": "global", "host": "global.example.com"},
 	)
 
 	got := r.Resolve("{{host}}/api?t={{token}}&s={{shared}}")
-	if got != "global.example.com/api?t=env-token&s=local" {
+	if got != "global.example.com/api?t=local-token&s=local" {
 		t.Fatalf("unexpected resolution: %q", got)
+	}
+}
+
+func TestResolveFallsBackThroughScopes(t *testing.T) {
+	r := New(
+		map[string]string{},
+		map[string]string{"token": "env-token"},
+		map[string]string{"token": "col-token", "coll": "c"},
+		map[string]string{"glob": "g"},
+	)
+	if got := r.Resolve("{{token}}/{{coll}}/{{glob}}"); got != "env-token/c/g" {
+		t.Fatalf("unexpected fallback resolution: %q", got)
 	}
 }
 

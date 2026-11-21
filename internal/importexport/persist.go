@@ -131,16 +131,8 @@ func ExportCollection(ctx context.Context, repo *database.Repository, collection
 		return nil, err
 	}
 
-	folderNodes := map[string]*exportFolder{}
-	for _, f := range folders {
-		folderNodes[f.ID] = &exportFolder{
-			ID: f.ID, Name: f.Name, Description: f.Description, Order: f.Order,
-			Auth: f.Auth, Events: f.Events, Items: []any{},
-		}
-	}
-	rootItems := []any{}
-	// Attach children before parents so nested folders are complete when the
-	// parent is appended. Sort by order for stable output.
+	// Build the folder tree. Postman items are rendered bottom-up so a folder's
+	// exported `item` array is complete before it is placed in its parent.
 	sorted := append([]model.Folder{}, folders...)
 	for i := 0; i < len(sorted); i++ {
 		for j := i + 1; j < len(sorted); j++ {
@@ -149,18 +141,17 @@ func ExportCollection(ctx context.Context, repo *database.Repository, collection
 			}
 		}
 	}
+
+	folderNodes := map[string]*exportFolder{}
 	for _, f := range sorted {
-		node := folderNodes[f.ID]
-		if f.ParentID != nil && *f.ParentID != "" {
-			if parent, ok := folderNodes[*f.ParentID]; ok {
-				parent.Items = append(parent.Items, node.toItem())
-				continue
-			}
+		folderNodes[f.ID] = &exportFolder{
+			ID: f.ID, Name: f.Name, Description: f.Description, Order: f.Order,
+			Auth: f.Auth, Events: f.Events, Items: []any{},
 		}
-		rootItems = append(rootItems, node.toItem())
 	}
-	// Requests are appended after folders. The frontend tree sorts by order, so
-	// we keep the original order for requests.
+
+	// Attach requests to their folders (or the collection root) first.
+	rootRequests := []any{}
 	for i := range requests {
 		req := requests[i]
 		item := requestToPostman(&req)
@@ -170,8 +161,38 @@ func ExportCollection(ctx context.Context, repo *database.Repository, collection
 				continue
 			}
 		}
-		rootItems = append(rootItems, item)
+		rootRequests = append(rootRequests, item)
 	}
+
+	childrenOf := map[string][]string{}
+	rootFolderIDs := []string{}
+	for _, f := range sorted {
+		if f.ParentID != nil && *f.ParentID != "" {
+			if _, ok := folderNodes[*f.ParentID]; ok {
+				childrenOf[*f.ParentID] = append(childrenOf[*f.ParentID], f.ID)
+				continue
+			}
+		}
+		rootFolderIDs = append(rootFolderIDs, f.ID)
+	}
+
+	var renderFolder func(id string) map[string]any
+	renderFolder = func(id string) map[string]any {
+		node := folderNodes[id]
+		items := make([]any, 0, len(node.Items)+len(childrenOf[id]))
+		items = append(items, node.Items...)
+		for _, childID := range childrenOf[id] {
+			items = append(items, renderFolder(childID))
+		}
+		node.Items = items
+		return node.toItem()
+	}
+
+	rootItems := []any{}
+	for _, id := range rootFolderIDs {
+		rootItems = append(rootItems, renderFolder(id))
+	}
+	rootItems = append(rootItems, rootRequests...)
 
 	variables := make([]map[string]any, 0, len(coll.Variables))
 	for _, v := range coll.Variables {
