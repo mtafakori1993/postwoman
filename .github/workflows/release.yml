@@ -1,0 +1,89 @@
+name: Release
+
+# Publishes a GitHub release with the installer artifacts that are committed at
+# the tagged commit. Runs automatically when a version tag is pushed, and can be
+# dispatched manually for older tags that predate this workflow.
+on:
+  push:
+    tags:
+      - "v*"
+      - "V*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to publish (e.g. v1.1.2)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the tagged commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 1
+
+      - name: Resolve tag, artifacts and notes
+        id: meta
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          VERSION="${VERSION#V}"
+          DEB="postwoman_${VERSION}_amd64.deb"
+          APPIMAGE="Postwoman-${VERSION}-x86_64.AppImage"
+          NOTES="docs/RELEASE_NOTES_${TAG}.md"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "deb=$DEB" >> "$GITHUB_OUTPUT"
+          echo "appimage=$APPIMAGE" >> "$GITHUB_OUTPUT"
+          echo "notes=$NOTES" >> "$GITHUB_OUTPUT"
+          for file in "$DEB" "$APPIMAGE"; do
+            if [ ! -f "$file" ]; then
+              echo "::error::artifact $file is not present at tag $TAG"
+              exit 1
+            fi
+          done
+          ls -lh "$DEB" "$APPIMAGE"
+
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.meta.outputs.tag }}"
+          DEB="${{ steps.meta.outputs.deb }}"
+          APPIMAGE="${{ steps.meta.outputs.appimage }}"
+          NOTES="${{ steps.meta.outputs.notes }}"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — attaching assets"
+            gh release upload "$TAG" "$DEB" "$APPIMAGE" --clobber
+            if [ -f "$NOTES" ]; then
+              gh release edit "$TAG" --notes-file "$NOTES"
+            fi
+          else
+            if [ -f "$NOTES" ]; then
+              gh release create "$TAG" "$DEB" "$APPIMAGE" \
+                --title "Postwoman $TAG" \
+                --notes-file "$NOTES" \
+                --verify-tag
+            else
+              gh release create "$TAG" "$DEB" "$APPIMAGE" \
+                --title "Postwoman $TAG" \
+                --generate-notes \
+                --verify-tag
+            fi
+          fi
+
+      - name: Release summary
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release view "${{ steps.meta.outputs.tag }}" --json tagName,url,assets \
+            --jq '"Released \(.tagName) - \(.url)\nAssets: \(.assets | map(.name) | join(", "))"'
