@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Postwoman
+Comment=API Development Platform
+Exec=Postwoman
+Icon=postwoman
+Terminal=false
+Categories=Development;Network;
+StartupNotify=true

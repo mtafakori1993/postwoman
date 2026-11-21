@@ -1,5 +1,5 @@
 # Postwoman
-![Postwoman Mail Icon](/home/Mohammad.Tafakori/Downloads/Postwoman Mail Icon.png)
+![Postwoman Mail Icon](frontend/src/assets/images/postwoman-mail-icon.png)
 
 **Postwoman** is a fast, open-source API client for developers and teams. It combines the functionality of tools like Postman with the speed and simplicity of a lightweight desktop app — wrapped in a single native binary with a modern React + TypeScript frontend.
 
@@ -16,10 +16,16 @@
 - **Import / Export** — Postman 2.0/2.1, OpenAPI, cURL, and more; full round-trip preservation.
 - **Cross-cutting** — redirect handling, proxies, TLS, timeouts, cancellation, context propagation.
 
-## AppImage Download
+## Installation
 
-You can download the pre-built AppImage for Linux:
-- [Postwoman-x86_64.AppImage](https://github.com/mtafakori1993/postwoman/releases/latest) (will be available after release)
+### AppImage (Linux)
+
+Download the latest release from the [Releases page](https://github.com/mtafakori1993/postwoman/releases):
+
+```
+chmod +x Postwoman-1.0.0-x86_64.AppImage
+./Postwoman-1.0.0-x86_64.AppImage
+```
 
 ## Tech Stack
 
