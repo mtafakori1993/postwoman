@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -120,6 +122,79 @@ func TestURLEncodedBody(t *testing.T) {
 
 	if !strings.Contains(body, "a=1") || !strings.Contains(body, "b=x+y") {
 		t.Fatalf("unexpected urlencoded body: %q", body)
+	}
+}
+
+func TestRawBodyUsesTextPlain(t *testing.T) {
+	var contentType string
+	var body string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		contentType = r.Header.Get("Content-Type")
+		b, _ := io.ReadAll(r.Body)
+		body = string(b)
+	}))
+	defer srv.Close()
+
+	do(t, &model.Request{
+		Method: "POST",
+		URL:    srv.URL,
+		Body:   model.Body{Mode: "raw", Raw: "plain {{value}}"},
+		Auth:   model.Auth{Type: "noauth"},
+	}, map[string]string{"value": "text"})
+
+	if !strings.Contains(contentType, "text/plain") {
+		t.Fatalf("unexpected raw content type %q", contentType)
+	}
+	if body != "plain text" {
+		t.Fatalf("unexpected raw body %q", body)
+	}
+}
+
+func TestMultipartUploadSetsContentTypeAndFilename(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "hello.txt")
+	if err := os.WriteFile(path, []byte("uploaded content"), 0o644); err != nil {
+		t.Fatalf("write temp file: %v", err)
+	}
+
+	var filename, partType, content string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		file, header, err := r.FormFile("upload")
+		if err != nil {
+			t.Errorf("FormFile: %v", err)
+			w.WriteHeader(400)
+			return
+		}
+		defer file.Close()
+		data, _ := io.ReadAll(file)
+		filename = header.Filename
+		partType = header.Header.Get("Content-Type")
+		content = string(data)
+		w.WriteHeader(201)
+	}))
+	defer srv.Close()
+
+	resp := do(t, &model.Request{
+		Method: "POST",
+		URL:    srv.URL,
+		Body: model.Body{Mode: "formdata", FormData: []model.KeyValue{
+			{Key: "upload", Type: "file", Src: path, Enabled: true},
+			{Key: "label", Value: "hello", Enabled: true},
+		}},
+		Auth: model.Auth{Type: "noauth"},
+	})
+
+	if resp.StatusCode != 201 {
+		t.Fatalf("expected 201, got %d (%s)", resp.StatusCode, resp.Error)
+	}
+	if filename != "hello.txt" {
+		t.Fatalf("unexpected filename %q", filename)
+	}
+	if !strings.HasPrefix(partType, "text/plain") {
+		t.Fatalf("unexpected part content type %q", partType)
+	}
+	if content != "uploaded content" {
+		t.Fatalf("unexpected file content %q", content)
 	}
 }
 

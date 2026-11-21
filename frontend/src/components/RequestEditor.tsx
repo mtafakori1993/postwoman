@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -6,12 +6,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Separator } from "@/components/ui/separator"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Send, Save, Copy, Trash2, Key, Globe, Settings, ChevronDown, ChevronUp, X } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { useWorkspaceStore } from "@/stores/workspace"
-import { Request, Header, QueryParam, KeyValuePair, BodyType, AuthType, AuthConfig } from "@/types"
+import { Send, Save, X } from "lucide-react"
+import { Request, Header, QueryParam, KeyValuePair, AuthConfig } from "@/types"
 import { KeyValueEditor } from "./KeyValueEditor"
 import { BodyEditor } from "./BodyEditor"
 import { AuthEditor } from "./AuthEditor"
@@ -48,15 +44,21 @@ export function RequestEditor({ request, onSend, onSave, onCancel, onChange, isL
   // Sync with request prop
   useEffect(() => {
     if (request) {
-      setUrl(request.url)
-      setMethod(request.method)
-      setHeaders(request.headers)
-      setQueryParams(request.queryParams)
-      setPathVariables(request.pathVariables)
-      setBody(request.body)
-      setAuth(request.auth)
-      setScripts(request.scripts)
-      setSettings(request.settings)
+      setUrl(request.url || "")
+      setMethod(request.method || "GET")
+      setHeaders(request.headers || [])
+      setQueryParams(request.queryParams || [])
+      setPathVariables(request.pathVariables || [])
+      setBody(request.body || { mode: "none" })
+      setAuth(request.auth || { type: "noauth" })
+      setScripts(request.scripts || [])
+      setSettings(request.settings || {
+        followRedirects: true,
+        followOriginalMethod: false,
+        maxRedirects: 10,
+        timeout: 30000,
+        encoding: "auto",
+      })
     }
   }, [request])
 
@@ -109,7 +111,7 @@ export function RequestEditor({ request, onSend, onSave, onCancel, onChange, isL
   return (
     <div className="flex flex-col h-full bg-card">
       {/* Request Line */}
-      <div className="flex items-center gap-2 p-3 border-b border-border bg-muted/30">
+      <div className="flex flex-wrap items-center gap-2 p-3 border-b border-border bg-muted/30">
         {/* Method Selector */}
         <Select value={method} onValueChange={handleMethodChange}>
           <SelectTrigger className="w-24 h-9">
@@ -162,11 +164,21 @@ export function RequestEditor({ request, onSend, onSave, onCancel, onChange, isL
 
       {/* Tab Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="border-b border-border bg-muted/30">
-        <TabsList className="p-1 bg-transparent">
+        <TabsList className="p-1 bg-transparent overflow-x-auto flex-nowrap justify-start w-full">
           <TabsTrigger value="params">Params</TabsTrigger>
           <TabsTrigger value="auth">Auth</TabsTrigger>
-          <TabsTrigger value="headers">Headers</TabsTrigger>
-          <TabsTrigger value="body">Body</TabsTrigger>
+          <TabsTrigger value="headers">
+            Headers
+            {headers.length > 0 && <span className="ml-1 text-[10px] text-muted-foreground">{headers.length}</span>}
+          </TabsTrigger>
+          <TabsTrigger value="body">
+            Body
+            {body.mode && body.mode !== "none" && (
+              <span className="ml-1 rounded bg-primary/15 px-1 text-[9px] font-semibold uppercase text-primary">
+                {body.mode === "formdata" ? "form" : body.mode === "urlencoded" ? "url" : body.mode}
+              </span>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="scripts">Scripts</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
@@ -221,13 +233,18 @@ export function RequestEditor({ request, onSend, onSave, onCancel, onChange, isL
               { key: "value", header: "Value", width: "50%" },
               { key: "description", header: "Description", width: "20%" },
             ]}
-            autoAddCommon={true}
           />
         </TabsContent>
 
         {/* Body Tab */}
         <TabsContent value="body" className="p-3">
-          <BodyEditor body={body} onChange={handleBodyChange} method={method} />
+          <BodyEditor
+            body={body}
+            onChange={handleBodyChange}
+            method={method}
+            headers={headers}
+            onHeadersChange={handleHeadersChange}
+          />
         </TabsContent>
 
         {/* Scripts Tab */}

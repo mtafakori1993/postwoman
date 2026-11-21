@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import * as api from "../lib/api"
+import { deepClone } from "../lib/utils"
 import type {
   AppSettings,
   Collection,
@@ -13,6 +14,7 @@ import type {
   Response,
   SidebarTab,
   TabState,
+  TabPreferences,
   WebSocketConnection,
   Workspace,
 } from "../types"
@@ -47,6 +49,14 @@ export function defaultSettings(): AppSettings {
     keyboardShortcuts: {},
     followRedirects: true,
     sendNoCacheHeader: false,
+  }
+}
+
+export function defaultTabPreferences(): TabPreferences {
+  return {
+    confirmCloseDirtyTabs: true,
+    closeTabOnMiddleClick: true,
+    tabCloseButton: "hover",
   }
 }
 
@@ -109,6 +119,7 @@ interface WorkspaceState {
   sidebarWidth: number
   activeSidebarTab: SidebarTab
   responsePanelHeight: number
+  tabPreferences: TabPreferences
 
   // lifecycle
   initialize: () => Promise<void>
@@ -154,7 +165,9 @@ interface WorkspaceState {
   newTab: (request?: Request, title?: string) => TabState
   setActiveTab: (id: string | null) => void
   closeTab: (id: string) => void
+  closeTabs: (ids: string[]) => void
   closeOtherTabs: (id: string) => void
+  duplicateTab: (id: string) => TabState | null
   reorderTabs: (tabs: TabState[]) => void
   updateTabRequest: (tabId: string, patch: Partial<Request>) => void
   setTabResponse: (tabId: string, response: Response | undefined) => void
@@ -189,27 +202,45 @@ interface WorkspaceState {
   setSidebarWidth: (width: number) => void
   setActiveSidebarTab: (tab: SidebarTab) => void
   setResponsePanelHeight: (height: number) => void
+  setTabPreferences: (patch: Partial<TabPreferences>) => void
 }
 
 const LAYOUT_KEY = "postwoman.layout"
 
-function loadLayout(): { sidebarOpen: boolean; sidebarWidth: number; responsePanelHeight: number; activeSidebarTab: SidebarTab } {
+function loadLayout(): {
+  sidebarOpen: boolean
+  sidebarWidth: number
+  responsePanelHeight: number
+  activeSidebarTab: SidebarTab
+  tabPreferences: TabPreferences
+} {
   const fallback = {
     sidebarOpen: true,
     sidebarWidth: 280,
     responsePanelHeight: 320,
     activeSidebarTab: "collections" as SidebarTab,
+    tabPreferences: defaultTabPreferences(),
   }
   try {
     const raw = localStorage.getItem(LAYOUT_KEY)
     if (!raw) return fallback
-    return { ...fallback, ...JSON.parse(raw) }
+    const parsed = JSON.parse(raw) as Partial<typeof fallback>
+    return {
+      ...fallback,
+      ...parsed,
+      tabPreferences: { ...fallback.tabPreferences, ...(parsed.tabPreferences ?? {}) },
+    }
   } catch {
     return fallback
   }
 }
 
-function saveLayout(state: Pick<WorkspaceState, "sidebarOpen" | "sidebarWidth" | "responsePanelHeight" | "activeSidebarTab">) {
+function saveLayout(
+  state: Pick<
+    WorkspaceState,
+    "sidebarOpen" | "sidebarWidth" | "responsePanelHeight" | "activeSidebarTab" | "tabPreferences"
+  >,
+) {
   try {
     localStorage.setItem(
       LAYOUT_KEY,
@@ -218,6 +249,7 @@ function saveLayout(state: Pick<WorkspaceState, "sidebarOpen" | "sidebarWidth" |
         sidebarWidth: state.sidebarWidth,
         responsePanelHeight: state.responsePanelHeight,
         activeSidebarTab: state.activeSidebarTab,
+        tabPreferences: state.tabPreferences,
       }),
     )
   } catch {
@@ -278,6 +310,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     sidebarWidth: layout.sidebarWidth,
     activeSidebarTab: layout.activeSidebarTab,
     responsePanelHeight: layout.responsePanelHeight,
+    tabPreferences: layout.tabPreferences,
 
     // ------------------------------------------------------------- lifecycle
 
@@ -569,9 +602,12 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     deleteRequest: async (id) => {
       try {
         await api.deleteRequest(id)
+        const tabIds = get().tabs.filter((t) => t.requestId === id).map((t) => t.id)
+        if (tabIds.length > 0) {
+          get().closeTabs(tabIds)
+        }
         set((s) => ({
           requests: s.requests.filter((r) => r.id !== id),
-          tabs: s.tabs.filter((t) => t.requestId !== id),
         }))
       } catch (err) {
         console.error(err)
@@ -636,11 +672,25 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     },
 
     closeTab: (id) => {
+      get().closeTabs([id])
+    },
+
+    closeTabs: (ids) => {
+      const remove = new Set(ids)
+      if (remove.size === 0) return
       set((s) => {
-        const tabs = s.tabs.filter((t) => t.id !== id)
+        const currentIndex = s.activeTabId ? s.tabs.findIndex((t) => t.id === s.activeTabId) : -1
+        const tabs = s.tabs.filter((t) => !remove.has(t.id))
         let activeTabId = s.activeTabId
-        if (activeTabId === id) {
-          activeTabId = tabs.length > 0 ? tabs[tabs.length - 1].id : null
+        if (activeTabId && remove.has(activeTabId)) {
+          const nextRight = s.tabs.slice(currentIndex + 1).find((t) => !remove.has(t.id))
+          const nextLeft = currentIndex > 0
+            ? [...s.tabs.slice(0, currentIndex)].reverse().find((t) => !remove.has(t.id))
+            : undefined
+          activeTabId = nextRight?.id ?? nextLeft?.id ?? null
+        }
+        if (activeTabId && !tabs.some((t) => t.id === activeTabId)) {
+          activeTabId = tabs[0]?.id ?? null
         }
         return { tabs, activeTabId }
       })
@@ -648,8 +698,43 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     },
 
     closeOtherTabs: (id) => {
-      set((s) => ({ tabs: s.tabs.filter((t) => t.id === id), activeTabId: id }))
+      const tab = get().tabs.find((t) => t.id === id)
+      if (!tab) return
+      get().closeTabs(get().tabs.filter((t) => t.id !== id).map((t) => t.id))
+      set({ activeTabId: id })
       scheduleTabSave()
+    },
+
+    duplicateTab: (id) => {
+      const source = get().tabs.find((t) => t.id === id)
+      if (!source) return null
+      const baseRequest = source.request ? deepClone(source.request) : newRequestDraft()
+      const title = `${source.title || baseRequest.name || "Untitled Request"} copy`
+      const request: Request = {
+        ...baseRequest,
+        id: "",
+        name: `${baseRequest.name || "Untitled Request"} copy`,
+      }
+      const tab: TabState = {
+        id: `tab-${uid()}`,
+        requestId: undefined,
+        title,
+        isDirty: Boolean(source.requestId || source.request?.id || source.isDirty),
+        isActive: true,
+        protocol: source.protocol || "http",
+        request,
+        response: source.response ? deepClone(source.response) : undefined,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }
+      set((s) => {
+        const index = s.tabs.findIndex((t) => t.id === id)
+        const tabs = [...s.tabs]
+        tabs.splice(index === -1 ? tabs.length : index + 1, 0, tab)
+        return { tabs, activeTabId: tab.id }
+      })
+      scheduleTabSave()
+      return tab
     },
 
     reorderTabs: (tabs) => {
@@ -866,6 +951,15 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
         const next = { ...s, responsePanelHeight: height }
         saveLayout(next)
         return { responsePanelHeight: height }
+      })
+    },
+
+    setTabPreferences: (patch) => {
+      set((s) => {
+        const tabPreferences = { ...s.tabPreferences, ...patch }
+        const next = { ...s, tabPreferences }
+        saveLayout(next)
+        return { tabPreferences }
       })
     },
   }

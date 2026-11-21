@@ -1,14 +1,29 @@
 import React, { useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Download, Copy, Search, Code, FileText, Eye, X, CheckCircle2, XCircle, Terminal } from "lucide-react"
+import {
+  CheckCircle2,
+  Code,
+  Copy,
+  Download,
+  Eye,
+  FileCode2,
+  FileText,
+  Image as ImageIcon,
+  Search,
+  Sparkles,
+  Terminal,
+  X,
+  XCircle,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
-import { Response, Cookie, Header } from "@/types"
+import { Response, Cookie, Header, ResponseViewMode } from "@/types"
 import { JSONViewer } from "./JSONViewer"
+import { SyntaxEditor } from "./SyntaxEditor"
+import { detectLanguage, extForContentType, formatContent, prettyXML } from "@/lib/format"
 import * as api from "../lib/api"
 
 interface ResponseViewerProps {
@@ -20,7 +35,7 @@ interface ResponseViewerProps {
 
 export function ResponseViewer({ response, requestHeaders, height, onHeightChange }: ResponseViewerProps) {
   const [activeTab, setActiveTab] = useState<"body" | "cookies" | "headers" | "tests" | "console">("body")
-  const [viewMode, setViewMode] = useState<"pretty" | "raw" | "preview">("pretty")
+  const [viewMode, setViewMode] = useState<ResponseViewMode>("pretty")
   const [searchQuery, setSearchQuery] = useState("")
   const [showSearch, setShowSearch] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -46,14 +61,13 @@ export function ResponseViewer({ response, requestHeaders, height, onHeightChang
   const passed = tests.filter((t) => t.passed).length
   const failed = tests.length - passed
 
-  const bodyText = useMemo(() => response?.body ?? "", [response])
-  const isJSON = useMemo(() => {
-    if (!response) return false
-    const ct = response.contentType || ""
-    if (ct.includes("json")) return true
-    const trimmed = bodyText.trim()
-    return (trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))
-  }, [response, bodyText])
+  const bodyText = response?.body ?? ""
+  const contentType = response?.contentType ?? ""
+  const language = useMemo(() => detectLanguage(contentType, bodyText), [contentType, bodyText])
+  const formattedBody = useMemo(() => {
+    if (!bodyText || viewMode !== "pretty" || language === "json") return ""
+    return formatContent(bodyText, language).output
+  }, [bodyText, language, viewMode])
 
   if (!response) {
     return (
@@ -81,7 +95,7 @@ export function ResponseViewer({ response, requestHeaders, height, onHeightChang
 
   const handleCopy = async () => {
     try {
-      await api.copyToClipboard(response.body)
+      await api.copyToClipboard(response.body || response.bodyBase64 || "")
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch (err) {
@@ -91,7 +105,17 @@ export function ResponseViewer({ response, requestHeaders, height, onHeightChang
 
   const handleSave = async () => {
     try {
-      const ext = isJSON ? "json" : "txt"
+      if (response.isBinary && response.bodyBase64) {
+        const blob = base64ToBlob(response.bodyBase64, contentType || "application/octet-stream")
+        const url = URL.createObjectURL(blob)
+        const anchor = document.createElement("a")
+        anchor.href = url
+        anchor.download = `response.${extForContentType(contentType)}`
+        anchor.click()
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+        return
+      }
+      const ext = extForContentType(contentType)
       await api.saveTextFile(`response.${ext}`, response.body)
     } catch (err) {
       console.error(err)
@@ -127,20 +151,10 @@ export function ResponseViewer({ response, requestHeaders, height, onHeightChang
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowSearch((v) => !v)} aria-label="Search in response">
             <Search className="h-4 w-4" />
           </Button>
-          <Select value={viewMode} onValueChange={(v) => setViewMode(v as typeof viewMode)}>
-            <SelectTrigger className="w-[120px] h-8">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pretty"><Eye className="h-4 w-4 mr-2" /> Pretty</SelectItem>
-              <SelectItem value="raw"><FileText className="h-4 w-4 mr-2" /> Raw</SelectItem>
-              <SelectItem value="preview"><Code className="h-4 w-4 mr-2" /> Preview</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleSave} aria-label="Save response">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleSave} aria-label="Save response" title="Save response">
             <Download className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleCopy} aria-label="Copy response">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleCopy} aria-label="Copy response" title="Copy response">
             <Copy className={cn("h-4 w-4", copied && "text-green-500")} />
           </Button>
         </div>
@@ -154,6 +168,7 @@ export function ResponseViewer({ response, requestHeaders, height, onHeightChang
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="flex-1 max-w-md h-8"
+            autoFocus
           />
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setShowSearch(false); setSearchQuery("") }}>
             <X className="h-4 w-4" />
@@ -162,7 +177,7 @@ export function ResponseViewer({ response, requestHeaders, height, onHeightChang
       )}
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex-1 flex flex-col min-h-0">
-        <TabsList className="p-1 bg-muted/30 border-b border-border justify-start">
+        <TabsList className="p-1 bg-muted/30 border-b border-border justify-start overflow-x-auto flex-nowrap shrink-0">
           <TabsTrigger value="body">Body</TabsTrigger>
           <TabsTrigger value="cookies">Cookies{response.cookies?.length ? ` (${response.cookies.length})` : ""}</TabsTrigger>
           <TabsTrigger value="headers">Headers{response.headers?.length ? ` (${response.headers.length})` : ""}</TabsTrigger>
@@ -173,27 +188,17 @@ export function ResponseViewer({ response, requestHeaders, height, onHeightChang
         <TabsContent value="body" className="flex-1 min-h-0 m-0">
           {response.error ? (
             <div className="p-4 text-sm text-destructive font-mono">{response.error}</div>
-          ) : response.isBinary ? (
-            <div className="p-4 text-sm text-muted-foreground">
-              Binary response ({formatBytes(response.bodySize)}) — use the download button to save it.
-            </div>
           ) : viewMode === "pretty" ? (
-            isJSON ? (
-              <JSONViewer json={response.body} searchQuery={searchQuery} onCopyPath={(p) => api.copyToClipboard(p)} />
-            ) : (
-              <ScrollArea className="h-full p-3">
-                <pre className="font-mono text-sm whitespace-pre-wrap break-all">{response.body}</pre>
-              </ScrollArea>
-            )
+            <PrettyBody
+              response={response}
+              language={language}
+              formattedBody={formattedBody}
+              searchQuery={searchQuery}
+            />
           ) : viewMode === "raw" ? (
-            <ScrollArea className="h-full p-3">
-              <pre className="font-mono text-sm whitespace-pre-wrap break-all">{response.body}</pre>
-            </ScrollArea>
+            <RawBody response={response} searchQuery={searchQuery} />
           ) : (
-            <div className="h-full border-t border-border">
-              {/* No allow-same-origin: untrusted HTML must not access app storage. */}
-              <iframe title="Response preview" srcDoc={response.body} className="w-full h-full bg-white" sandbox="allow-scripts" />
-            </div>
+            <PreviewBody response={response} language={language} />
           )}
         </TabsContent>
 
@@ -213,8 +218,285 @@ export function ResponseViewer({ response, requestHeaders, height, onHeightChang
           <ConsoleOutput entries={consoleEntries} />
         </TabsContent>
       </Tabs>
+
+      {activeTab === "body" && !response.error && (
+        <ResponseViewTabs value={viewMode} onChange={setViewMode} />
+      )}
     </div>
   )
+}
+
+/** Bottom navigation for the response body views. Kept in a single,
+ * non-wrapping row so it stays compact on narrow layouts. */
+function ResponseViewTabs({
+  value,
+  onChange,
+}: {
+  value: ResponseViewMode
+  onChange: (mode: ResponseViewMode) => void
+}) {
+  const views: { value: ResponseViewMode; label: string; icon: React.ReactNode }[] = [
+    { value: "pretty", label: "Pretty", icon: <Sparkles className="h-3.5 w-3.5" /> },
+    { value: "raw", label: "Raw", icon: <FileText className="h-3.5 w-3.5" /> },
+    { value: "preview", label: "Preview", icon: <Eye className="h-3.5 w-3.5" /> },
+  ]
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return
+    event.preventDefault()
+    const index = views.findIndex((view) => view.value === value)
+    const delta = event.key === "ArrowRight" ? 1 : -1
+    const next = views[(index + delta + views.length) % views.length]
+    onChange(next.value)
+    const buttons = event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+    buttons[(index + delta + views.length) % views.length]?.focus()
+  }
+
+  return (
+    <div
+      role="tablist"
+      aria-label="Response body view"
+      onKeyDown={handleKeyDown}
+      className="flex h-9 shrink-0 items-center gap-1 overflow-x-auto border-t border-border bg-muted/30 px-2"
+    >
+      {views.map((view) => {
+        const active = view.value === value
+        return (
+          <button
+            key={view.value}
+            role="tab"
+            aria-selected={active}
+            tabIndex={active ? 0 : -1}
+            onClick={() => onChange(view.value)}
+            className={cn(
+              "inline-flex h-7 shrink-0 items-center gap-1.5 rounded px-2.5 text-xs font-medium transition-colors outline-none",
+              "focus-visible:ring-1 focus-visible:ring-ring",
+              active
+                ? "border border-border bg-background text-foreground shadow-sm"
+                : "border border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            {view.icon}
+            {view.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function PrettyBody({
+  response,
+  language,
+  formattedBody,
+  searchQuery,
+}: {
+  response: Response
+  language: ReturnType<typeof detectLanguage>
+  formattedBody: string
+  searchQuery: string
+}) {
+  if (response.isBinary) {
+    return (
+      <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
+        <div>
+          <ImageIcon className="mx-auto mb-2 h-8 w-8 opacity-40" />
+          <p>Binary response ({formatBytes(response.bodySize)})</p>
+          <p className="mt-1 text-xs">Use Preview to render it or the download button to save it.</p>
+        </div>
+      </div>
+    )
+  }
+  if (!response.body) {
+    return <EmptyBody />
+  }
+  if (language === "json") {
+    return <JSONViewer json={response.body} searchQuery={searchQuery} onCopyPath={(p) => api.copyToClipboard(p)} />
+  }
+  if (language === "text") {
+    return (
+      <ScrollArea className="h-full">
+        <HighlightedPre text={formattedBody} query={searchQuery} className="p-3" />
+      </ScrollArea>
+    )
+  }
+  return (
+    <div className="h-full min-h-0">
+      <SyntaxEditor
+        value={formattedBody}
+        language={language}
+        readOnly
+        lineNumbers
+        height="100%"
+        ariaLabel="Pretty response body"
+      />
+    </div>
+  )
+}
+
+function RawBody({ response, searchQuery }: { response: Response; searchQuery: string }) {
+  const raw = response.isBinary ? response.bodyBase64 ?? "" : response.body
+  if (!raw) {
+    return response.isBinary ? (
+      <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
+        <div>
+          <FileCode2 className="mx-auto mb-2 h-8 w-8 opacity-40" />
+          <p>Binary response ({formatBytes(response.bodySize)})</p>
+          <p className="mt-1 text-xs">Use Preview to render it or the download button to save it.</p>
+        </div>
+      </div>
+    ) : (
+      <EmptyBody />
+    )
+  }
+  return (
+    <ScrollArea className="h-full">
+      <HighlightedPre text={raw} query={searchQuery} className="p-3" />
+    </ScrollArea>
+  )
+}
+
+function PreviewBody({
+  response,
+  language,
+}: {
+  response: Response
+  language: ReturnType<typeof detectLanguage>
+}) {
+  const ct = (response.contentType || "").toLowerCase()
+  const dataUrl = response.bodyBase64
+    ? `data:${response.contentType || "application/octet-stream"};base64,${response.bodyBase64}`
+    : ""
+
+  if (ct.startsWith("image/") && dataUrl) {
+    return (
+      <div className="flex h-full items-center justify-center overflow-auto bg-muted/20 p-4">
+        <img src={dataUrl} alt="Response preview" className="max-h-full max-w-full object-contain shadow-sm" />
+      </div>
+    )
+  }
+
+  if (ct.includes("application/pdf") && dataUrl) {
+    return (
+      <div className="h-full">
+        <iframe title="Response preview" src={dataUrl} className="h-full w-full border-0 bg-white" />
+      </div>
+    )
+  }
+
+  if (ct.startsWith("audio/") && dataUrl) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        <audio controls src={dataUrl} className="w-full max-w-xl" />
+      </div>
+    )
+  }
+
+  if (ct.startsWith("video/") && dataUrl) {
+    return (
+      <div className="flex h-full items-center justify-center overflow-auto bg-black p-2">
+        <video controls src={dataUrl} className="max-h-full max-w-full" />
+      </div>
+    )
+  }
+
+  if (language === "html" || ct.includes("text/html")) {
+    return (
+      <div className="h-full border-t border-border">
+        {/* No allow-same-origin: untrusted HTML must not access app storage. */}
+        <iframe
+          title="Response preview"
+          srcDoc={response.body}
+          className="h-full w-full border-0 bg-white"
+          sandbox="allow-scripts allow-forms allow-popups"
+        />
+      </div>
+    )
+  }
+
+  if (!response.body) {
+    return response.isBinary ? (
+      <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
+        <div>
+          <FileCode2 className="mx-auto mb-2 h-8 w-8 opacity-40" />
+          <p>No preview available for this binary response.</p>
+          <p className="mt-1 text-xs">Use the download button to save it.</p>
+        </div>
+      </div>
+    ) : (
+      <EmptyBody />
+    )
+  }
+
+  if (language === "text") {
+    return (
+      <ScrollArea className="h-full">
+        <pre className="whitespace-pre-wrap break-all p-3 font-mono text-sm">{response.body}</pre>
+      </ScrollArea>
+    )
+  }
+
+  // Structured but non-renderable payloads (XML, etc.) are shown pretty-printed.
+  if (language === "xml") {
+    return (
+      <ScrollArea className="h-full">
+        <pre className="whitespace-pre-wrap break-all p-3 font-mono text-sm">{prettyXML(response.body)}</pre>
+      </ScrollArea>
+    )
+  }
+
+  return (
+    <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
+      <div>
+        <Eye className="mx-auto mb-2 h-8 w-8 opacity-40" />
+        <p>Preview is not available for this content type.</p>
+        <p className="mt-1 text-xs">Switch to Pretty or Raw to inspect the response.</p>
+      </div>
+    </div>
+  )
+}
+
+function EmptyBody() {
+  return (
+    <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">
+      The response body is empty.
+    </div>
+  )
+}
+
+function HighlightedPre({ text, query, className }: { text: string; query?: string; className?: string }) {
+  const content = useMemo(() => {
+    if (!query?.trim()) return text
+    try {
+      const pattern = new RegExp(`(${escapeRegExp(query)})`, "ig")
+      return text.split(pattern).map((part, index) =>
+        part.toLowerCase() === query.toLowerCase() ? (
+          <mark key={index} className="rounded bg-yellow-300/70 px-0.5 text-foreground dark:bg-yellow-500/40">
+            {part}
+          </mark>
+        ) : (
+          <React.Fragment key={index}>{part}</React.Fragment>
+        ),
+      )
+    } catch {
+      return text
+    }
+  }, [text, query])
+
+  return (
+    <pre className={cn("whitespace-pre-wrap break-all font-mono text-sm", className)}>{content}</pre>
+  )
+}
+
+function base64ToBlob(base64: string, contentType: string): Blob {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
+  return new Blob([bytes], { type: contentType })
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
 function CookieTable({ cookies }: { cookies: Cookie[] }) {

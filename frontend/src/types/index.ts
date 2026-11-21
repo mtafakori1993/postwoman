@@ -79,3 +79,10 @@ export type SidebarTab =
   | "settings"
 
 export type ResponseViewMode = "pretty" | "raw" | "preview"
+
+/** User preferences that control tab-strip behaviour. Persisted locally. */
+export interface TabPreferences {
+  confirmCloseDirtyTabs: boolean
+  closeTabOnMiddleClick: boolean
+  tabCloseButton: "hover" | "always"
+}

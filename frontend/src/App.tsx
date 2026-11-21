@@ -8,7 +8,16 @@ import { SearchPalette } from "./components/SearchPalette"
 import { RunnerDialog } from "./components/RunnerDialog"
 import { useWorkspaceStore, newRequestDraft } from "./stores/workspace"
 import * as api from "./lib/api"
-import { Plus, AlertTriangle, Loader2 } from "lucide-react"
+import { Plus, AlertTriangle, Loader2, Save } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./components/ui/dialog"
+import { Button } from "./components/ui/button"
 import type { Request } from "./types"
 
 function App() {
@@ -19,16 +28,14 @@ function App() {
     tabs,
     activeTabId,
     setActiveTab,
-    closeTab,
+    closeTabs,
+    duplicateTab,
     newTab,
     reorderTabs,
     updateTabRequest,
     setTabResponse,
-    markTabSaved,
-    saveRequest,
-    createCollection,
-    collections,
     settings,
+    tabPreferences,
     responsePanelHeight,
     setResponsePanelHeight,
     sendingTabId,
@@ -41,6 +48,12 @@ function App() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [runnerOpen, setRunnerOpen] = useState(false)
   const [toast, setToast] = useState<{ kind: "info" | "error"; text: string } | null>(null)
+  const [pendingClose, setPendingClose] = useState<{
+    ids: string[]
+    dirtyCount: number
+    dirtyTitles: string[]
+    label: string
+  } | null>(null)
 
   const activeTab = tabs.find((t) => t.id === activeTabId)
   const activeRequest = activeTab?.request
@@ -74,39 +87,138 @@ function App() {
   // Theme
   useEffect(() => {
     const root = document.documentElement
-    const dark =
-      settings.theme === "dark" ||
-      (settings.theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)
-    root.classList.toggle("dark", dark)
+    const media = window.matchMedia?.("(prefers-color-scheme: dark)")
+    const apply = () => {
+      const dark = settings.theme === "dark" || (settings.theme === "system" && !!media?.matches)
+      root.classList.toggle("dark", dark)
+    }
+    apply()
+    if (settings.theme === "system" && media) {
+      media.addEventListener?.("change", apply)
+      return () => media.removeEventListener?.("change", apply)
+    }
   }, [settings.theme])
 
   const handleNewTab = useCallback(() => {
     newTab(newRequestDraft())
   }, [newTab])
 
-  const handleSave = useCallback(async () => {
-    if (!activeTab?.request) return
-    let request: Request = activeTab.request
-    try {
-      if (!request.id) {
-        let collectionId = request.collectionId
-        if (!collectionId) {
-          if (collections.length === 0) {
-            const created = await createCollection("My Collection")
-            collectionId = created?.id ?? ""
-          } else {
-            collectionId = collections[0].id
-          }
-        }
-        if (!collectionId) throw new Error("Could not determine a collection for this request")
-        request = { ...request, collectionId, name: request.name || "Untitled Request" }
+  const requestCloseTabs = useCallback(
+    (ids: string[], label: string) => {
+      const currentTabs = useWorkspaceStore.getState().tabs
+      const existing = new Set(currentTabs.map((tab) => tab.id))
+      const targetIds = ids.filter((id) => existing.has(id))
+      if (targetIds.length === 0) return
+      const dirtyTabs = currentTabs.filter((tab) => targetIds.includes(tab.id) && tab.isDirty)
+      if (tabPreferences.confirmCloseDirtyTabs && dirtyTabs.length > 0) {
+        setPendingClose({
+          ids: targetIds,
+          dirtyCount: dirtyTabs.length,
+          dirtyTitles: dirtyTabs.map((tab) => tab.title || "Untitled Request"),
+          label,
+        })
+        return
       }
-      const saved = await saveRequest(request)
-      if (saved) markTabSaved(activeTab.id, saved)
+      closeTabs(targetIds)
+    },
+    [tabPreferences.confirmCloseDirtyTabs, closeTabs],
+  )
+
+  const handleCloseTab = useCallback(
+    (id: string) => {
+      const tab = useWorkspaceStore.getState().tabs.find((item) => item.id === id)
+      requestCloseTabs([id], tab?.title || "this tab")
+    },
+    [requestCloseTabs],
+  )
+
+  const handleCloseOtherTabs = useCallback(
+    (id: string) => {
+      requestCloseTabs(
+        useWorkspaceStore
+          .getState()
+          .tabs.filter((tab) => tab.id !== id)
+          .map((tab) => tab.id),
+        "the other tabs",
+      )
+    },
+    [requestCloseTabs],
+  )
+
+  const handleCloseTabsToRight = useCallback(
+    (id: string) => {
+      const currentTabs = useWorkspaceStore.getState().tabs
+      const index = currentTabs.findIndex((tab) => tab.id === id)
+      if (index === -1) return
+      requestCloseTabs(
+        currentTabs.slice(index + 1).map((tab) => tab.id),
+        "the tabs to the right",
+      )
+    },
+    [requestCloseTabs],
+  )
+
+  const handleCloseAllTabs = useCallback(() => {
+    requestCloseTabs(
+      useWorkspaceStore.getState().tabs.map((tab) => tab.id),
+      "all tabs",
+    )
+  }, [requestCloseTabs])
+
+  const confirmPendingClose = useCallback(() => {
+    if (!pendingClose) return
+    closeTabs(pendingClose.ids)
+    setPendingClose(null)
+  }, [pendingClose, closeTabs])
+
+  // Persist a single tab's request. Reads live store state (rather than closed
+  // over values) so it stays correct when saving several tabs in one pass, and
+  // so requests that were never saved get a collection on demand.
+  const persistTabRequest = useCallback(async (tabId: string) => {
+    const state = useWorkspaceStore.getState()
+    const tab = state.tabs.find((item) => item.id === tabId)
+    if (!tab?.request) return
+    let request: Request = tab.request
+    if (!request.id) {
+      let collectionId = request.collectionId
+      if (!collectionId) {
+        if (state.collections.length === 0) {
+          const created = await state.createCollection("My Collection")
+          collectionId = created?.id ?? ""
+        } else {
+          collectionId = state.collections[0].id
+        }
+      }
+      if (!collectionId) throw new Error("Could not determine a collection for this request")
+      request = { ...request, collectionId, name: request.name || "Untitled Request" }
+    }
+    const saved = await state.saveRequest(request)
+    if (saved) useWorkspaceStore.getState().markTabSaved(tabId, saved)
+  }, [])
+
+  const saveAndClosePending = useCallback(async () => {
+    if (!pendingClose) return
+    try {
+      for (const id of pendingClose.ids) {
+        const tab = useWorkspaceStore.getState().tabs.find((item) => item.id === id)
+        if (tab?.isDirty) await persistTabRequest(id)
+      }
+    } catch (err) {
+      setToast({ kind: "error", text: api.errorMessage(err) })
+      return
+    }
+    closeTabs(pendingClose.ids)
+    setPendingClose(null)
+  }, [pendingClose, persistTabRequest, closeTabs])
+
+  const handleSave = useCallback(async () => {
+    if (!activeTab) return
+    try {
+      await persistTabRequest(activeTab.id)
     } catch (err) {
       setToast({ kind: "error", text: api.errorMessage(err) })
     }
-  }, [activeTab, collections, createCollection, saveRequest, markTabSaved])
+  }, [activeTab, persistTabRequest])
 
   const handleImport = useCallback(async () => {
     try {
@@ -137,7 +249,7 @@ function App() {
         handleSave()
       } else if (key === "w") {
         e.preventDefault()
-        if (activeTabId) closeTab(activeTabId)
+        if (activeTabId) handleCloseTab(activeTabId)
       } else if (e.key === "Enter") {
         e.preventDefault()
         sendActiveRequest()
@@ -145,7 +257,7 @@ function App() {
     }
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [handleNewTab, toggleSidebar, handleSave, activeTabId, closeTab, sendActiveRequest])
+  }, [handleNewTab, toggleSidebar, handleSave, activeTabId, handleCloseTab, sendActiveRequest])
 
   if (!ready) {
     return (
@@ -183,9 +295,14 @@ function App() {
           tabs={tabs}
           activeTabId={activeTabId}
           onTabChange={setActiveTab}
-          onTabClose={closeTab}
+          onTabClose={handleCloseTab}
           onNewTab={handleNewTab}
           onTabReorder={reorderTabs}
+          onTabCloseOthers={handleCloseOtherTabs}
+          onTabCloseToRight={handleCloseTabsToRight}
+          onTabCloseAll={handleCloseAllTabs}
+          onTabDuplicate={duplicateTab}
+          preferences={tabPreferences}
         />
 
         <div className="flex-1 flex flex-col overflow-hidden relative min-h-0">
@@ -247,6 +364,47 @@ function App() {
 
       <SearchPalette open={searchOpen} onOpenChange={setSearchOpen} />
       <RunnerDialog open={runnerOpen} onOpenChange={setRunnerOpen} />
+
+      <Dialog open={pendingClose !== null} onOpenChange={(open) => !open && setPendingClose(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Unsaved changes
+            </DialogTitle>
+            <DialogDescription>
+              {pendingClose?.dirtyCount === 1
+                ? "One of the tabs you are closing has unsaved changes. Save it or discard the changes before closing."
+                : `${pendingClose?.dirtyCount ?? 0} of the tabs you are closing have unsaved changes. Save them or discard the changes before closing.`}
+              {pendingClose?.label ? ` (${pendingClose.label})` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {pendingClose && pendingClose.dirtyTitles.length > 0 && (
+            <ul className="max-h-32 space-y-0.5 overflow-y-auto rounded-md border border-border bg-muted/20 p-2 text-xs">
+              {pendingClose.dirtyTitles.map((title, index) => (
+                <li key={`${title}-${index}`} className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-orange-500" aria-hidden />
+                  <span className="truncate" title={title}>
+                    {title}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingClose(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmPendingClose}>
+              Discard and Close
+            </Button>
+            <Button onClick={saveAndClosePending}>
+              <Save className="mr-1.5 h-4 w-4" />
+              Save and Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {toast && (
         <div

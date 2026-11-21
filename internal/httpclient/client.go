@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/cookiejar"
+	"net/textproto"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -169,8 +170,13 @@ func (c *Client) Do(ctx context.Context, reqModel *model.Request, resolver *vari
 			}
 			httpReq.Header.Add(h.Key, value)
 		}
-		if contentType != "" && httpReq.Header.Get("Content-Type") == "" {
-			httpReq.Header.Set("Content-Type", contentType)
+		if contentType != "" {
+			// Multipart boundaries are generated while building the body, so a
+			// user-supplied header can never be complete. Always use the value
+			// that includes the actual boundary.
+			if reqModel.Body.Mode == "formdata" || httpReq.Header.Get("Content-Type") == "" {
+				httpReq.Header.Set("Content-Type", contentType)
+			}
 		}
 		if httpReq.Header.Get("User-Agent") == "" {
 			httpReq.Header.Set("User-Agent", "Postwoman/1.0")
@@ -299,8 +305,10 @@ func buildBody(body model.Body, resolver *variables.Resolver) ([]byte, string, e
 		return nil, "", nil
 	}
 	switch body.Mode {
-	case "json", "raw":
+	case "json":
 		return []byte(resolver.Resolve(body.Raw)), "application/json", nil
+	case "raw":
+		return []byte(resolver.Resolve(body.Raw)), "text/plain", nil
 	case "xml":
 		return []byte(resolver.Resolve(body.Raw)), "application/xml", nil
 	case "html":
@@ -335,7 +343,14 @@ func buildBody(body model.Body, resolver *variables.Resolver) ([]byte, string, e
 					_ = writer.Close()
 					return nil, "", fmt.Errorf("cannot read file %q: %w", path, err)
 				}
-				part, err := writer.CreateFormFile(key, name)
+				contentType := kv.ContentType
+				if contentType == "" {
+					contentType = http.DetectContentType(content)
+				}
+				header := textproto.MIMEHeader{}
+				header.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`, escapeQuotes(key), escapeQuotes(name)))
+				header.Set("Content-Type", contentType)
+				part, err := writer.CreatePart(header)
 				if err != nil {
 					_ = writer.Close()
 					return nil, "", err
@@ -379,6 +394,10 @@ func buildBody(body model.Body, resolver *variables.Resolver) ([]byte, string, e
 	default:
 		return []byte(resolver.Resolve(body.Raw)), "", nil
 	}
+}
+
+func escapeQuotes(value string) string {
+	return strings.NewReplacer("\\", "\\\\", "\"", "\\\"").Replace(value)
 }
 
 func readUploadFile(path string) ([]byte, string, error) {

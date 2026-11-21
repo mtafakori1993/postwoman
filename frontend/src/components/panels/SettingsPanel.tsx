@@ -10,8 +10,17 @@ import { cn } from "@/lib/utils"
 import { useWorkspaceStore } from "@/stores/workspace"
 
 export function SettingsPanel() {
-  const { settings, updateSettings, resetSettings, workspaces, workspace, createWorkspace, setActiveWorkspace } =
-    useWorkspaceStore()
+  const {
+    settings,
+    updateSettings,
+    resetSettings,
+    workspaces,
+    workspace,
+    createWorkspace,
+    setActiveWorkspace,
+    tabPreferences,
+    setTabPreferences,
+  } = useWorkspaceStore()
 
   const shortcuts: { keys: string; action: string }[] = [
     { keys: "Ctrl+B", action: "Toggle sidebar" },
@@ -55,6 +64,41 @@ export function SettingsPanel() {
               onChange={(e) => updateSettings({ editorFontSize: parseInt(e.target.value) || 13 })}
               className="w-[90px] h-8"
             />
+          </div>
+        </section>
+
+        <Separator />
+
+        <section className="space-y-2">
+          <Label className="text-xs font-semibold uppercase text-muted-foreground">Tabs</Label>
+          <label className="flex items-center justify-between gap-2 cursor-pointer">
+            <span>Confirm before closing unsaved tabs</span>
+            <Checkbox
+              checked={tabPreferences.confirmCloseDirtyTabs}
+              onCheckedChange={(c) => setTabPreferences({ confirmCloseDirtyTabs: c === true })}
+            />
+          </label>
+          <label className="flex items-center justify-between gap-2 cursor-pointer">
+            <span>Middle-click closes tabs</span>
+            <Checkbox
+              checked={tabPreferences.closeTabOnMiddleClick}
+              onCheckedChange={(c) => setTabPreferences({ closeTabOnMiddleClick: c === true })}
+            />
+          </label>
+          <div className="flex items-center justify-between gap-2">
+            <span>Close button</span>
+            <Select
+              value={tabPreferences.tabCloseButton}
+              onValueChange={(v) => setTabPreferences({ tabCloseButton: v as "hover" | "always" })}
+            >
+              <SelectTrigger className="w-[130px] h-8">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="hover">On hover</SelectItem>
+                <SelectItem value="always">Always visible</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </section>
 
