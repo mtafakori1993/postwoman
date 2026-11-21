@@ -3,6 +3,33 @@
 > Initial audit performed before changes. Statuses are updated at the end of the
 > project in `docs/FINAL_AUDIT_REPORT.md`.
 
+## 0. Status after implementation (summary)
+
+The audit below describes the state **before** the work. The current state:
+
+| Area | Before | After |
+| --- | --- | --- |
+| Frontend ↔ backend | BROKEN (fake Wails v1 bridge) | COMPLETE — real generated bindings (`src/lib/api.ts`) |
+| Persistence | localStorage only | COMPLETE — SQLite via the Go backend; tabs + settings persisted |
+| Database bootstrap | ensureDir no-op, no default workspace | COMPLETE — dir creation, WAL, migrations 001–003, default workspace |
+| Layout | double sidebar offset, duplicate resizer | COMPLETE — flex layout, single resizer |
+| HTTP client | partial/broken bodies, auth, redirects | COMPLETE — all body modes, auth, proxy, TLS, timeout, cancel |
+| Variables | naive replace, unused | COMPLETE — scoped resolution + dynamic variables |
+| Collections/folders/requests | frontend-only, dead menus | COMPLETE — real CRUD, nested folders, context menus |
+| Environments | no UI | COMPLETE — manager panel, activation, globals |
+| History | never recorded | COMPLETE — recorded and browsable |
+| Import/export | partial, lossy | COMPLETE — Postman 2.0/2.1, env, OpenAPI 3.x, Swagger 2.0, cURL, HAR, GraphQL, AsyncAPI; lossless round-trip |
+| Scripting | stored, never run | COMPLETE — `pm.*` with results and timeout |
+| Runner | none | COMPLETE — iterations, data files, delay, stop-on-error |
+| WebSocket | types only | COMPLETE — live sessions |
+| Mock servers | table only | COMPLETE — real local servers |
+| Search | `console.log` | COMPLETE — backend search palette |
+| gRPC / MQTT / Socket.IO / monitors | tables only | NOT IMPLEMENTED — no fake UI shown |
+| AppImage | missing | COMPLETE — `Postwoman-1.0.0-x86_64.AppImage` |
+| Tests | none | COMPLETE — Go unit/integration suite, `go test ./...` and `-race` pass |
+
+See `docs/FINAL_AUDIT_REPORT.md` for commands, results and limitations.
+
 ## 1. Project state at audit time
 
 | Item | Finding |

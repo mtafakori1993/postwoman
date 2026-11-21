@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { KeyValuePair, AuthConfig, AuthType } from "@/types"
-import { Key, Shield, User, Globe, Lock, Fingerprint } from "lucide-react"
+import { Key, Shield, User, Globe, Lock, Fingerprint, AlertTriangle } from "lucide-react"
 
 const AUTH_TYPES: { value: AuthType; label: string; icon: React.ReactNode; description: string }[] = [
   { value: "noauth", label: "No Auth", icon: <Shield className="h-4 w-4" />, description: "No authentication" },
@@ -23,6 +23,17 @@ const AUTH_TYPES: { value: AuthType; label: string; icon: React.ReactNode; descr
 interface AuthEditorProps {
   auth: AuthConfig
   onChange: (auth: AuthConfig) => void
+}
+
+function NotSupportedNotice({ kind }: { kind: string }) {
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+      <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+      <span>
+        {kind} signing is not implemented. Requests using this auth type will fail with a clear error.
+      </span>
+    </div>
+  )
 }
 
 /** Fill missing fields from `defaults` so the result always has every field. */
@@ -350,6 +361,7 @@ export function AuthEditor({ auth, onChange }: AuthEditorProps) {
       case "hawk":
         return (
           <div className="space-y-3">
+            <NotSupportedNotice kind="Hawk" />
             <div className="grid grid-cols-2 gap-2">
               <Input
                 placeholder="ID"
@@ -388,6 +400,7 @@ export function AuthEditor({ auth, onChange }: AuthEditorProps) {
       case "ntlm":
         return (
           <div className="space-y-3">
+            <NotSupportedNotice kind="NTLM" />
             <div className="grid grid-cols-2 gap-2">
               <Input
                 placeholder="Username"
