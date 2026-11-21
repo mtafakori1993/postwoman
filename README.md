@@ -1,17 +1,24 @@
 <p align="center">
-  <img src="assets/postwoman-logo.png" width="150" alt="Postwoman logo" />
+  <img src="assets/postwoman-banner.png"
+       alt="Postwoman — a modern API client for Linux: powerful request builder, collections and environments, advanced testing and scripting, smart AI assistant, fast and lightweight, extensible and customisable. Linux only for now." />
 </p>
 
 <h1 align="center">Postwoman</h1>
 
-<p align="center">A desktop API development platform for building, sending and testing HTTP requests.</p>
+<p align="center">
+  A desktop API development platform for building, sending and testing HTTP requests.
+  <br />
+  <a href="https://github.com/mtafakori1993/postwoman/releases/latest"><b>Download the latest release</b></a>
+  · Debian/Ubuntu <code>.deb</code> · portable Linux AppImage
+</p>
 
-> **Logo.** The image above is loaded from
-> [`assets/postwoman-logo.png`](assets/postwoman-logo.png) (also committed as
-> [`assets/postwoman-logo.base64`](assets/postwoman-logo.base64)). A relative path is
-> used instead of an inline `data:` URI because GitHub's HTML sanitizer strips
-> `data:` URLs from `<img src>`, which is why the image previously did not appear.
-> The same PNG is reused for the application icon when packaging.
+> **Banner &amp; logo.** The banner above is loaded from
+> [`assets/postwoman-banner.png`](assets/postwoman-banner.png); the application
+> logo/icon is [`assets/postwoman-logo.png`](assets/postwoman-logo.png) (also
+> committed as [`assets/postwoman-logo.base64`](assets/postwoman-logo.base64)) and is
+> reused as the application icon when packaging. Relative paths are used instead of
+> inline `data:` URIs because GitHub's HTML sanitizer strips `data:` URLs from
+> `<img src>`, which is why the image previously did not appear.
 
 ---
 
