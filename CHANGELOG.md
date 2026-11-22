@@ -17,6 +17,7 @@ All notable changes to Postwoman are documented here. The format follows
 
 - Restore natural interface typography using the platform system font and default rendering ([a59464f](https://github.com/mtafakori1993/postwoman/commit/a59464f))
 - Harden the Windows release build with reliable MinGW-w64/NSIS discovery, toolchain verification and artifact validation.
+- Fix a PowerShell parse error (`$out:` expansion) that made the Windows build fail immediately, and upload a build log for diagnosis.
 
 [1.4.1]: https://github.com/mtafakori1993/postwoman/releases/tag/v1.4.1
 

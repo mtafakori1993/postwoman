@@ -17,6 +17,7 @@ Postwoman v1.4.1 is an API development desktop release for Windows and Linux.
 
 - Restored natural interface typography: the platform system font is used instead of a bold-only Open Sans face, non-default font feature settings were removed, and forced leading overrides were relaxed ([a59464f](https://github.com/mtafakori1993/postwoman/commit/a59464f)).
 - Hardened the Windows release build with reliable MinGW-w64/NSIS discovery, a toolchain verification step, execution-policy bypass, build-log artifacts and error annotations. The workflow now validates the executable/installer versions and portable ZIP contents before publishing.
+- Fixed the Windows build script parse error (`$out:` variable expansion) that made the job fail immediately, and added a build-log artifact for future diagnosis.
 
 **Full changelog:** https://github.com/mtafakori1993/postwoman/compare/v1.3.3...v1.4.1
 

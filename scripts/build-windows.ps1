@@ -254,6 +254,6 @@ $sums = foreach ($asset in $assets) {
 Set-Content -LiteralPath (Join-Path $out "SHA256SUMS.txt") -Encoding ASCII -Value $sums
 
 Write-Host ""
-Write-Host "Windows assets in $out:"
+Write-Host "Windows assets in ${out}:"
 $assets | ForEach-Object { Write-Host ("  {0}  ({1:N0} bytes)" -f $_.Name, $_.Length) }
 Write-Host "  SHA256SUMS.txt"
