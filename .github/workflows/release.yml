@@ -21,6 +21,7 @@ on:
 
 permissions:
   contents: write
+  statuses: write
 
 concurrency:
   group: release-${{ github.event.inputs.tag || github.ref_name }}
@@ -140,6 +141,7 @@ jobs:
         shell: pwsh
         env:
           VERSION: ${{ needs.validate.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           $log = "build-windows.log"
           & pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-windows.ps1 -Version $env:VERSION *>&1 |
@@ -147,6 +149,16 @@ jobs:
           $code = $LASTEXITCODE
           if ($code -ne 0) {
             Get-Content $log -Tail 100 | ForEach-Object { Write-Host "::error::$_" }
+            $tail = ((Get-Content $log -Tail 10 | Out-String).Trim()) -replace "`r?`n", " | "
+            if ($tail.Length -gt 130) { $tail = $tail.Substring($tail.Length - 130) }
+            "### Windows build failure`n`n$tail" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+            $repo = '${{ github.repository }}'
+            $sha = '${{ github.sha }}'
+            try {
+              & gh api "repos/$repo/statuses/$sha" -f state=failure -f context="windows-build" -f description="$tail" | Out-Null
+            } catch {
+              Write-Host "could not post diagnostic status: $_"
+            }
             exit $code
           }
       - name: Upload Windows build log
