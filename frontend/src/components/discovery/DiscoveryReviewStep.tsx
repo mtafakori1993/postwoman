@@ -46,6 +46,7 @@ interface DiscoveryReviewStepProps {
   patchOptions: (patch: Partial<DiscoveryOptions>) => void
   preview: () => void
   runImport: () => void
+  backToSetup: () => void
   busy: boolean
 }
 
@@ -66,6 +67,7 @@ export function DiscoveryReviewStep({
   patchOptions,
   preview,
   runImport,
+  backToSetup,
   busy,
 }: DiscoveryReviewStepProps) {
   const [search, setSearch] = useState("")
@@ -217,13 +219,20 @@ export function DiscoveryReviewStep({
           </div>
           <ScrollArea className="min-h-0 flex-1">
             <div className="divide-y">
-              {visible.length === 0 && (
-                <p className="p-4 pw-text-2xs text-muted-foreground">
-                  {endpoints.length === 0
-                    ? "No endpoints were found. Try enabling AI enrichment or widening the scan options."
-                    : "No endpoints match the current filters."}
-                </p>
-              )}
+              {visible.length === 0 &&
+                (endpoints.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 p-6 text-center">
+                    <p className="text-xs font-medium">No endpoints were found</p>
+                    <p className="max-w-sm pw-text-2xs text-muted-foreground">
+                      Try enabling AI enrichment, widening the scan options or choosing a different project folder.
+                    </p>
+                    <Button size="sm" variant="outline" onClick={backToSetup}>
+                      Back to setup
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="p-4 pw-text-2xs text-muted-foreground">No endpoints match the current filters.</p>
+                ))}
               {visible.map((endpoint) => {
                 const edit = edits[endpoint.id]
                 const selected = edit?.selected ?? true

@@ -342,6 +342,7 @@ export function AIDiscoveryDialog({ open, onOpenChange }: AIDiscoveryDialogProps
                 patchOptions={patchOptions}
                 preview={preview}
                 runImport={runImport}
+                backToSetup={() => setStage("setup")}
                 busy={busy}
               />
             ) : (
