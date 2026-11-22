@@ -19,7 +19,7 @@ All notable changes to Postwoman are documented here. The format follows
 - Redesign the API Discovery Agent as a full-size workspace with a stage stepper, filterable endpoint list, per-endpoint detail tabs (details, params, schema, source) and a collection preview before import.
 - Harden the Windows release build with reliable MinGW-w64/NSIS discovery, toolchain verification and artifact validation.
 - Fix a PowerShell parse error (`$out:` expansion) that made the Windows build fail immediately, and upload a build log for diagnosis.
-- Embed a four-part file and product version in the Windows executable metadata so the app and installer report the release version reliably; the verification step now accepts either value.
+- Embed a four-part file and product version in the Windows executable metadata (`build/windows/info.json`) and stamp the compiled executable with `scripts/windows-version` before packaging, so the app and installer report the release version reliably; the verification step accepts either value.
 
 ### Fixed
 

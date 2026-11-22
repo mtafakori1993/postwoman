@@ -103,7 +103,11 @@ if (-not $wailsExe) {
     Fail "wails.exe not found. Install it with: go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.1"
 }
 Add-ToolDirectory $wailsExe
-Write-Host "Using Wails: $wailsExe"
+$wailsVersion = (& $wailsExe version 2>&1 | Out-String).Trim()
+Write-Host "Using Wails: $wailsExe ($wailsVersion)"
+if ($wailsVersion -notmatch '2\.17\.1') {
+    Fail "Wails CLI version mismatch: '$wailsVersion' (expected v2.17.1). Reinstall: go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.1"
+}
 
 $gccExe = Find-Executable "gcc" @(
     $env:MINGW_BIN,
@@ -173,6 +177,20 @@ if ($LASTEXITCODE -ne 0) { Fail "wails build failed" }
 
 $exe = Assert-File (Join-Path $Root "build\bin\Postwoman.exe") 1000000 "Windows executable"
 Assert-PE $exe.FullName "Windows executable"
+
+# Wails' resource generation is not always reflected in the produced binary, so
+# stamp the release metadata deterministically before verifying and packaging.
+Write-Host "==> stamping executable version metadata"
+Push-Location (Join-Path $Root "scripts\windows-version")
+try {
+    & go run . -file $exe.FullName -version $Version -product "Postwoman" `
+        -company "Postwoman" -copyright "MIT licensed - Postwoman authors" `
+        -comments "Modern API development platform"
+    if ($LASTEXITCODE -ne 0) { Fail "failed to stamp executable version metadata" }
+} finally {
+    Pop-Location
+}
+
 $exeVersion = (Get-Item -LiteralPath $exe.FullName).VersionInfo
 $exeProduct = "$($exeVersion.ProductVersion)"
 $exeFile = "$($exeVersion.FileVersion)"
@@ -183,6 +201,20 @@ Write-Host "    executable version: product='$exeProduct' file='$exeFile'"
 
 $installer = $null
 if (-not $NoInstaller) {
+    # Rebuild the installer so the executable it embeds also carries the version.
+    $installerDir = Join-Path $Root "build\windows\installer"
+    if (Test-Path -LiteralPath (Join-Path $installerDir "wails_tools.nsh")) {
+        Write-Host "==> rebuilding NSIS installer with the stamped executable"
+        Push-Location $installerDir
+        try {
+            & $makensisExe "-DARG_WAILS_AMD64_BINARY=$($exe.FullName)" `
+                "-DWAILS_INSTALL_SCOPE=user" "-DREQUEST_EXECUTION_LEVEL=user" "project.nsi"
+            if ($LASTEXITCODE -ne 0) { Fail "failed to rebuild the NSIS installer" }
+        } finally {
+            Pop-Location
+        }
+    }
+
     $candidates = Get-ChildItem -Path (Join-Path $Root "build\bin") -Filter "*installer*.exe" -File |
         Sort-Object LastWriteTime -Descending
     if (-not $candidates) { Fail "NSIS installer was not produced in build\bin" }
