@@ -34,6 +34,16 @@ import type {
   JSONDiff,
   OAuth2StartResult,
   AIRequest,
+  AIProviderConfig,
+  AIProviderDescriptor,
+  AIConnectionTest,
+  AIModelList,
+  AIStatus,
+  DiscoveryOptions,
+  DiscoveryDirListing,
+  DiscoverySession,
+  DiscoverySourceFile,
+  DiscoveryGenerateRequest,
   AuthConfig,
   OAuth2Config,
 } from "../types"
@@ -204,6 +214,44 @@ export const clearCookies = () => guard<void>(() => App.ClearCookies())
 export const aiAssist = (input: AIRequest) =>
   guard<string>(() => App.AIAssist(asModel<model.AIRequest>(input)))
 
+// ------------------------------------------------------- AI configuration
+
+export const aiProviderDescriptors = () =>
+  guard<AIProviderDescriptor[]>(() => App.AIProviderDescriptors())
+export const aiTestConnection = (config: AIProviderConfig) =>
+  guard<AIConnectionTest>(() => App.AITestConnection(asModel<model.AIProviderConfig>(config)))
+export const aiListModels = (config: AIProviderConfig) =>
+  guard<AIModelList>(() => App.AIListModels(asModel<model.AIProviderConfig>(config)))
+export const aiStatus = () => guard<AIStatus>(() => App.AIStatus())
+
+// -------------------------------------------------------- discovery agent
+
+export const discoveryListDirectory = (directory: string, options: DiscoveryOptions) =>
+  guard<DiscoveryDirListing>(() =>
+    App.DiscoveryListDirectory(directory, asModel<model.DiscoveryOptions>(options)),
+  )
+export const discoveryStart = (options: DiscoveryOptions) =>
+  guard<string>(() => App.DiscoveryStart(asModel<model.DiscoveryOptions>(options)))
+export const discoveryGet = (sessionID: string) =>
+  guard<DiscoverySession>(() => App.DiscoveryGet(sessionID))
+export const discoveryCancel = (sessionID: string) =>
+  guard<void>(() => App.DiscoveryCancel(sessionID))
+export const discoverySourceFile = (
+  sessionID: string,
+  filePath: string,
+  startLine = 0,
+  endLine = 0,
+) =>
+  guard<DiscoverySourceFile>(() =>
+    App.DiscoverySourceFile(sessionID, filePath, startLine, endLine),
+  )
+export const discoveryGenerate = (request: DiscoveryGenerateRequest) =>
+  guard<string>(() => App.DiscoveryGenerate(asModel<model.DiscoveryGenerateRequest>(request)))
+export const discoveryValidate = (collectionJSON: string) =>
+  guard<string[]>(() => App.DiscoveryValidate(collectionJSON))
+export const discoveryImport = (request: DiscoveryGenerateRequest) =>
+  guard<ImportResult>(() => App.DiscoveryImport(asModel<model.DiscoveryGenerateRequest>(request)))
+
 // -------------------------------------------------------------- import URL
 
 export const importFromURL = (workspaceID: string, sourceURL: string) =>
@@ -300,6 +348,8 @@ export const clearMockServerLogs = (id: string) => guard<void>(() => App.ClearMo
 
 export const openFileDialog = (title: string, pattern = "*") =>
   guard<string>(() => App.OpenFileDialog(title, pattern))
+export const openDirectoryDialog = (title: string) =>
+  guard<string>(() => App.OpenDirectoryDialog(title))
 export const saveFileDialog = (title: string, defaultName: string) =>
   guard<string>(() => App.SaveFileDialog(title, defaultName))
 export const readTextFile = (path: string) => guard<string>(() => App.ReadTextFile(path))

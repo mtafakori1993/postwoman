@@ -62,7 +62,7 @@ export function AIAssistant({ open, onOpenChange, request, response }: AIAssista
         {!aiEnabled && (
           <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>The assistant is disabled. Enable it and add a provider API key in Settings → AI assistant.</span>
+            <span>The assistant is disabled. Enable it and add a provider API key in Settings → AI providers.</span>
           </div>
         )}
 

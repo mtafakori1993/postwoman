@@ -15,6 +15,7 @@ import {
   Plus,
   Search as SearchIcon,
   Settings as SettingsIcon,
+  Compass,
   Sparkles,
   Sun,
   Terminal,
@@ -31,6 +32,7 @@ interface CommandPaletteProps {
   onOpenRunner: () => void
   onOpenShortcuts: () => void
   onOpenAI: () => void
+  onOpenDiscovery: () => void
 }
 
 interface PaletteItem {
@@ -42,7 +44,7 @@ interface PaletteItem {
   run: () => void
 }
 
-export function CommandPalette({ open, onOpenChange, onNewRequest, onImport, onImportCurl, onOpenRunner, onOpenShortcuts, onOpenAI }: CommandPaletteProps) {
+export function CommandPalette({ open, onOpenChange, onNewRequest, onImport, onImportCurl, onOpenRunner, onOpenShortcuts, onOpenAI, onOpenDiscovery }: CommandPaletteProps) {
   const [query, setQuery] = useState("")
   const [activeIndex, setActiveIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -78,6 +80,7 @@ export function CommandPalette({ open, onOpenChange, onNewRequest, onImport, onI
     action("run-collection", "Run collection", "Actions", Play, () => { close(); onOpenRunner() })
     action("shortcuts", "Keyboard shortcuts", "Actions", Keyboard, () => { close(); onOpenShortcuts() })
     action("ai", "AI assistant", "Actions", Sparkles, () => { close(); onOpenAI() })
+    action("discovery", "Discover API from a project", "Actions", Compass, () => { close(); onOpenDiscovery() }, "Scan source code, review endpoints, import a collection")
     action("clear-history", "Clear history", "Actions", Trash2, () => { close(); void store.clearHistory() })
     action("toggle-theme", `Switch to ${settings.theme === "dark" ? "light" : "dark"} theme`, "Actions", settings.theme === "dark" ? Sun : Moon, () => {
       close()

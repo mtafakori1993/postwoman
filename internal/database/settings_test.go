@@ -11,8 +11,8 @@ func TestMergeSettingsAppliesNewDefaults(t *testing.T) {
 	if got.FontSize != 15 {
 		t.Errorf("default interface font size = %d, want 15", got.FontSize)
 	}
-	if got.UIFont != "open-sans" {
-		t.Errorf("default interface font = %q, want open-sans", got.UIFont)
+	if got.UIFont != "system" {
+		t.Errorf("default interface font = %q, want system", got.UIFont)
 	}
 	if got.EditorFontFamily != "mono" || got.EditorFontSize != 13 {
 		t.Errorf("editor defaults changed: family=%q size=%d", got.EditorFontFamily, got.EditorFontSize)
@@ -20,16 +20,24 @@ func TestMergeSettingsAppliesNewDefaults(t *testing.T) {
 }
 
 func TestMergeSettingsMigratesLegacyFontDefaults(t *testing.T) {
-	// 13 px and 16 px were the shipped defaults in earlier releases, and
-	// "system" was the previous interface font default.
+	// 13 px and 16 px were the shipped defaults in earlier releases.
 	for _, legacySize := range []int{13, 16} {
 		got := mergeSettings(model.DefaultAppSettings(), model.AppSettings{FontSize: legacySize, UIFont: "system"})
 		if got.FontSize != 15 {
 			t.Errorf("legacy size %d: got %d, want 15", legacySize, got.FontSize)
 		}
-		if got.UIFont != "open-sans" {
-			t.Errorf("legacy size %d: interface font = %q, want open-sans", legacySize, got.UIFont)
+		if got.UIFont != "system" {
+			t.Errorf("legacy size %d: interface font = %q, want system", legacySize, got.UIFont)
 		}
+	}
+}
+
+func TestMergeSettingsMigratesBoldOnlyOpenSansDefault(t *testing.T) {
+	// v1.3.3 briefly made a Bold-only Open Sans face the interface default.
+	// Those stored values are moved back to the natural system sans.
+	got := mergeSettings(model.DefaultAppSettings(), model.AppSettings{UIFont: "open-sans"})
+	if got.UIFont != "system" {
+		t.Errorf("interface font = %q, want system", got.UIFont)
 	}
 }
 

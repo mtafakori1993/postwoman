@@ -19,8 +19,10 @@ import (
 	"github.com/rs/zerolog/log"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"Postwoman/internal/ai"
 	"Postwoman/internal/collections"
 	"Postwoman/internal/database"
+	"Postwoman/internal/discovery"
 	"Postwoman/internal/httpclient"
 	"Postwoman/internal/importexport"
 	"Postwoman/internal/jsonutil"
@@ -31,7 +33,10 @@ import (
 	"Postwoman/internal/websocket"
 )
 
-const appVersion = "1.3.3"
+// appVersion is the fallback version for local development builds. Release
+// builds inject the repository VERSION through -ldflags "-X main.appVersion=…"
+// so the application, installer and archives all report the same value.
+var appVersion = "1.3.3"
 
 // App is the Wails-bound backend. Every exported method is callable from the
 // React frontend through the generated bindings in frontend/wailsjs/go/main.
@@ -44,6 +49,8 @@ type App struct {
 	collectionMgr *collections.Manager
 	wsManager     *websocket.Manager
 	mockManager   *mockserver.Manager
+	aiManager     *ai.Manager
+	discoveryMgr  *discovery.Manager
 	workspaceID   string
 	wailsReady    bool
 
@@ -97,6 +104,8 @@ func (a *App) startup(ctx context.Context) {
 		})
 	})
 	a.mockManager = mockserver.NewManager()
+	a.aiManager = ai.NewManager()
+	a.discoveryMgr = discovery.NewManager(a.aiManager)
 	a.restoreCookies()
 
 	ws, err := a.repo.EnsureDefaultWorkspace(ctx)
@@ -205,7 +214,7 @@ func (a *App) Bootstrap() (*model.AppState, error) {
 	}
 
 	_, state.ActiveEnvironmentID, _ = a.repo.GetActiveWorkspace(ctx)
-	state.Settings = a.repo.GetSettingsModel(ctx)
+	state.Settings = a.repo.GetSettingsModel(ctx).SanitizedForUI()
 	return state, nil
 }
 
@@ -919,11 +928,18 @@ func (a *App) DeleteHistoryEntry(id string) error {
 // ---------------------------------------------------------------------------
 
 func (a *App) GetSettings() model.AppSettings {
-	return a.repo.GetSettingsModel(a.ctx)
+	return a.repo.GetSettingsModel(a.ctx).SanitizedForUI()
 }
 
 func (a *App) SaveSettings(settings model.AppSettings) error {
-	return a.repo.SaveSettingsModel(a.ctx, settings)
+	// The UI never receives API keys, so merge stored credentials back in and
+	// honour an explicit "clear key" request before persisting.
+	stored := a.repo.GetSettingsModel(a.ctx)
+	merged := settings.MergeAIKeys(stored)
+	if err := a.repo.SaveSettingsModel(a.ctx, merged); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (a *App) GetSetting(key string) (interface{}, error) {
@@ -1312,6 +1328,12 @@ func (a *App) OpenFileDialog(title, pattern string) (string, error) {
 	})
 }
 
+// OpenDirectoryDialog prompts the user to pick a project directory. It is used
+// by the API discovery agent instead of making users type absolute paths.
+func (a *App) OpenDirectoryDialog(title string) (string, error) {
+	return wailsRuntime.OpenDirectoryDialog(a.ctx, wailsRuntime.OpenDialogOptions{Title: title})
+}
+
 func (a *App) SaveFileDialog(title, defaultName string) (string, error) {
 	return wailsRuntime.SaveFileDialog(a.ctx, wailsRuntime.SaveDialogOptions{
 		Title:           title,
@@ -1649,33 +1671,100 @@ func (a *App) GraphQLIntrospect(request model.Request, environmentID string) (st
 }
 
 // ---------------------------------------------------------------------------
-// Optional AI assistant
+// AI: centralised configuration and shared service layer
 // ---------------------------------------------------------------------------
 
-// AIAssist performs a chat-completions request against the user-configured
-// OpenAI-compatible endpoint. It is disabled until the user opts in and
-// provides a provider + API key; request/response data is only sent when the
-// UI explicitly calls this method.
+// defaultAISystemPrompt is used by every AI feature unless a caller supplies a
+// more specific system prompt.
+const defaultAISystemPrompt = "You are an expert API engineer embedded in the Postwoman API client. Be concise, concrete and technically accurate. Use fenced code blocks where useful."
+
+// AIProviderDescriptors lists the supported provider protocols so the settings
+// screen can render provider-specific fields without hardcoding them.
+func (a *App) AIProviderDescriptors() []model.AIProviderDescriptor {
+	return ai.Descriptors()
+}
+
+// resolveAIConfig picks the saved global provider unless the caller supplied an
+// unsaved configuration, in which case stored credentials are merged in so the
+// UI never has to echo keys back.
+func (a *App) resolveAIConfig(input model.AIProviderConfig) model.AIProviderConfig {
+	settings := a.repo.GetSettingsModel(a.ctx)
+	if input.ID == "" && input.Kind == "" && input.BaseURL == "" && input.Model == "" {
+		return settings.ActiveAIProvider()
+	}
+	return ai.MergeProviderSecrets(input, settings)
+}
+
+// AITestConnection probes the configured provider and reports connectivity
+// without ever returning the API key.
+func (a *App) AITestConnection(input model.AIProviderConfig) model.AIConnectionTest {
+	cfg := a.resolveAIConfig(input)
+	client, err := ai.NewClient(cfg)
+	if err != nil {
+		return model.AIConnectionTest{OK: false, Provider: cfg.Name, Message: "Configuration invalid: " + err.Error()}
+	}
+	timeout := cfg.TimeoutSeconds
+	if timeout <= 0 {
+		timeout = 60
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, time.Duration(timeout)*time.Second)
+	defer cancel()
+	return client.TestConnection(ctx)
+}
+
+// AIListModels returns the model identifiers advertised by the provider.
+func (a *App) AIListModels(input model.AIProviderConfig) (model.AIModelList, error) {
+	cfg := a.resolveAIConfig(input)
+	client, err := ai.NewClient(cfg)
+	if err != nil {
+		return model.AIModelList{Provider: cfg.Name}, err
+	}
+	timeout := cfg.TimeoutSeconds
+	if timeout <= 0 {
+		timeout = 60
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, time.Duration(timeout)*time.Second)
+	defer cancel()
+	models, err := client.ListModels(ctx)
+	if err != nil {
+		return model.AIModelList{Provider: cfg.Name, Warning: err.Error()}, nil
+	}
+	return model.AIModelList{Provider: cfg.Name, Models: models}, nil
+}
+
+// AIStatus reports whether AI is usable without issuing a request.
+func (a *App) AIStatus() model.AIStatus {
+	settings := a.repo.GetSettingsModel(a.ctx)
+	cfg := settings.ActiveAIProvider()
+	status := model.AIStatus{
+		Enabled: settings.AIEnabled, Provider: cfg.Name, Model: cfg.Model,
+		Kind: cfg.Kind, BaseURL: cfg.BaseURL,
+	}
+	if !status.Enabled {
+		status.Message = "AI is disabled in Settings → AI"
+		return status
+	}
+	if _, err := ai.NewClient(cfg); err != nil {
+		status.Message = err.Error()
+		return status
+	}
+	status.Ready = true
+	status.Message = "AI is configured"
+	return status
+}
+
+// AIAssist runs a chat completion through the shared AI service. Every AI
+// feature (assistant, docs, JSON generation, discovery) goes through this layer
+// so provider credentials live in exactly one place.
 func (a *App) AIAssist(input model.AIRequest) (string, error) {
 	settings := a.repo.GetSettingsModel(a.ctx)
-	if !settings.AIEnabled {
-		return "", fmt.Errorf("the AI assistant is disabled; enable it in Settings")
+	manager := a.aiManager
+	if manager == nil {
+		manager = ai.NewManager()
 	}
-	if strings.TrimSpace(settings.AIAPIKey) == "" {
-		return "", fmt.Errorf("no AI API key configured; add one in Settings")
-	}
-	if strings.TrimSpace(settings.AIBaseURL) == "" {
-		return "", fmt.Errorf("no AI endpoint configured; add one in Settings")
-	}
-	base := strings.TrimRight(settings.AIBaseURL, "/")
-	endpoint := base
-	if !strings.HasSuffix(base, "/chat/completions") {
-		endpoint = base + "/chat/completions"
-	}
-
 	system := strings.TrimSpace(input.SystemPrompt)
 	if system == "" {
-		system = "You are an expert API engineer embedded in the Postwoman API client. Be concise, concrete and technically accurate. Use fenced code blocks where useful."
+		system = defaultAISystemPrompt
 	}
 	userParts := []string{}
 	if p := strings.TrimSpace(input.Prompt); p != "" {
@@ -1685,7 +1774,7 @@ func (a *App) AIAssist(input model.AIRequest) (string, error) {
 		userParts = append(userParts, "Request configuration:\n```json\n"+r+"\n```")
 	}
 	if b := strings.TrimSpace(input.ResponseBody); b != "" {
-		const max = 24000
+		const max = 20000
 		if len(b) > max {
 			b = b[:max] + "\n…(response truncated for the assistant)"
 		}
@@ -1694,55 +1783,110 @@ func (a *App) AIAssist(input model.AIRequest) (string, error) {
 	if len(userParts) == 0 {
 		return "", fmt.Errorf("a prompt or request/response context is required")
 	}
-
-	payload := map[string]any{
-		"model": settings.AIModel,
-		"messages": []map[string]string{
-			{"role": "system", "content": system},
-			{"role": "user", "content": strings.Join(userParts, "\n\n")},
-		},
+	timeout := settings.AITimeoutSeconds
+	if timeout <= 0 {
+		timeout = 120
 	}
-	encoded, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-	ctx, cancel := context.WithTimeout(a.ctx, 90*time.Second)
+	ctx, cancel := context.WithTimeout(a.ctx, time.Duration(timeout)*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(encoded)))
+	reply, err := manager.Chat(ctx, settings, ai.ChatRequest{
+		System:      system,
+		Messages:    []ai.Message{{Role: "user", Content: strings.Join(userParts, "\n\n")}},
+		Model:       input.Model,
+		Temperature: input.Temperature,
+		MaxTokens:   input.MaxTokens,
+		JSONMode:    input.JSONMode,
+	})
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+settings.AIAPIKey)
-	resp, err := (&http.Client{Timeout: 90 * time.Second}).Do(req)
+	return reply.Content, nil
+}
+
+// ---------------------------------------------------------------------------
+// API Discovery Agent
+// ---------------------------------------------------------------------------
+
+// DiscoveryListDirectory returns one level of the project browser. Dependency,
+// build and secret locations are flagged so the UI can explain exclusions.
+func (a *App) DiscoveryListDirectory(dir string, opts model.DiscoveryOptions) (*model.DiscoveryDirListing, error) {
+	if a.discoveryMgr == nil {
+		a.discoveryMgr = discovery.NewManager(a.aiManager)
+	}
+	return a.discoveryMgr.ListDirectory(dir, opts)
+}
+
+// DiscoveryStart begins a background analysis and streams progress events over
+// the "discovery:progress" channel. It returns the session id immediately.
+func (a *App) DiscoveryStart(opts model.DiscoveryOptions) (string, error) {
+	if a.discoveryMgr == nil {
+		a.discoveryMgr = discovery.NewManager(a.aiManager)
+	}
+	settings := a.repo.GetSettingsModel(a.ctx)
+	return a.discoveryMgr.Start(opts, settings, func(progress model.DiscoveryProgress) {
+		a.emit("discovery:progress", progress)
+	})
+}
+
+// DiscoveryGet returns the current session state, including findings and the
+// generated collection preview.
+func (a *App) DiscoveryGet(sessionID string) (*model.DiscoverySession, error) {
+	if a.discoveryMgr == nil {
+		return nil, fmt.Errorf("discovery agent is not initialised")
+	}
+	return a.discoveryMgr.Get(sessionID)
+}
+
+// DiscoveryCancel stops a running analysis.
+func (a *App) DiscoveryCancel(sessionID string) error {
+	if a.discoveryMgr == nil {
+		return fmt.Errorf("discovery agent is not initialised")
+	}
+	return a.discoveryMgr.Cancel(sessionID)
+}
+
+// DiscoverySourceFile returns a window of a project file for the review screen.
+func (a *App) DiscoverySourceFile(sessionID, filePath string, startLine, endLine int) (*model.DiscoverySourceFile, error) {
+	if a.discoveryMgr == nil {
+		return nil, fmt.Errorf("discovery agent is not initialised")
+	}
+	return a.discoveryMgr.SourceFile(sessionID, filePath, startLine, endLine)
+}
+
+// DiscoveryGenerate re-renders the reviewed endpoints as a Postwoman collection.
+func (a *App) DiscoveryGenerate(req model.DiscoveryGenerateRequest) (string, error) {
+	if a.discoveryMgr == nil {
+		return "", fmt.Errorf("discovery agent is not initialised")
+	}
+	return a.discoveryMgr.Generate(req.SessionID, req)
+}
+
+// DiscoveryValidate checks a collection JSON document against the import parser.
+func (a *App) DiscoveryValidate(collectionJSON string) ([]string, error) {
+	return discovery.ValidateCollection(collectionJSON)
+}
+
+// DiscoveryImport imports the reviewed endpoints as a native collection.
+func (a *App) DiscoveryImport(req model.DiscoveryGenerateRequest) (*model.ImportSummary, error) {
+	if a.discoveryMgr == nil {
+		return nil, fmt.Errorf("discovery agent is not initialised")
+	}
+	collection, err := a.discoveryMgr.Generate(req.SessionID, req)
 	if err != nil {
-		return "", fmt.Errorf("AI request failed: %w", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-	if resp.StatusCode >= 400 {
-		return "", fmt.Errorf("AI endpoint returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	workspaceID := a.workspaceID
+	if workspaceID == "" {
+		if workspace, wsErr := a.repo.EnsureDefaultWorkspace(a.ctx); wsErr == nil {
+			workspaceID = workspace.ID
+		}
 	}
-	var parsed struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-		Error *struct {
-			Message string `json:"message"`
-		} `json:"error"`
+	summary, err := a.collectionMgr.Import(a.ctx, workspaceID, []byte(collection), "discovered-api.json")
+	if err != nil {
+		return nil, err
 	}
-	if err := json.Unmarshal(body, &parsed); err != nil {
-		return "", fmt.Errorf("AI endpoint returned an unexpected response: %w", err)
-	}
-	if parsed.Error != nil && parsed.Error.Message != "" {
-		return "", fmt.Errorf("AI provider error: %s", parsed.Error.Message)
-	}
-	if len(parsed.Choices) == 0 || strings.TrimSpace(parsed.Choices[0].Message.Content) == "" {
-		return "", fmt.Errorf("AI endpoint returned no content")
-	}
-	return parsed.Choices[0].Message.Content, nil
+	a.emit("collections:updated", nil)
+	return summary, nil
 }
 
 // ---------------------------------------------------------------------------

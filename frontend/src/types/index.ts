@@ -63,7 +63,27 @@ export type ExtractionResult = Plain<model.ExtractionResult>
 export type JSONDiff = Plain<model.JSONDiff>
 export type JSONDiffEntry = Plain<model.JSONDiffEntry>
 export type AIRequest = Plain<model.AIRequest>
+export type AIProviderConfig = Plain<model.AIProviderConfig>
+export type AIProviderDescriptor = Plain<model.AIProviderDescriptor>
+export type AIConnectionTest = Plain<model.AIConnectionTest>
+export type AIModelList = Plain<model.AIModelList>
+export type AIStatus = Plain<model.AIStatus>
 export type OAuth2StartResult = Plain<model.OAuth2StartResult>
+
+// --- API discovery agent ---------------------------------------------------
+
+export type DiscoveryOptions = Plain<model.DiscoveryOptions>
+export type DiscoveryProgress = Plain<model.DiscoveryProgress>
+export type DiscoverySession = Plain<model.DiscoverySession>
+export type DiscoveryFileInfo = Plain<model.DiscoveryFileInfo>
+export type DiscoveredEndpoint = Plain<model.DiscoveredEndpoint>
+export type DiscoveryParam = Plain<model.DiscoveryParam>
+export type DiscoverySchemaField = Plain<model.DiscoverySchemaField>
+export type DiscoveryDirEntry = Plain<model.DiscoveryDirEntry>
+export type DiscoveryDirListing = Plain<model.DiscoveryDirListing>
+export type DiscoverySourceFile = Plain<model.DiscoverySourceFile>
+export type DiscoveryEndpointEdit = Plain<model.DiscoveryEndpointEdit>
+export type DiscoveryGenerateRequest = Plain<model.DiscoveryGenerateRequest>
 export type CodeTarget = "curl" | "http" | "fetch" | "node" | "python" | "go" | "php"
 
 // --- aliases used throughout the UI ---------------------------------------

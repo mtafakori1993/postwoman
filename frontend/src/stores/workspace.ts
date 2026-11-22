@@ -52,7 +52,7 @@ export function defaultSettings(): AppSettings {
     sendNoCacheHeader: false,
     accentColor: "orange",
     editorFontFamily: "mono",
-    uiFont: "open-sans",
+    uiFont: "system",
     compactMode: false,
     layoutPreset: "default",
     aiEnabled: false,
@@ -60,6 +60,25 @@ export function defaultSettings(): AppSettings {
     aiBaseUrl: "https://api.openai.com/v1",
     aiApiKey: "",
     aiModel: "gpt-4o-mini",
+    aiTemperature: 0.2,
+    aiMaxTokens: 2048,
+    aiTimeoutSeconds: 60,
+    aiProviders: [
+      {
+        id: "openai",
+        name: "OpenAI",
+        kind: "openai",
+        baseUrl: "https://api.openai.com/v1",
+        apiKey: "",
+        apiKeySet: false,
+        model: "gpt-4o-mini",
+        temperature: 0.2,
+        maxTokens: 2048,
+        timeoutSeconds: 60,
+      },
+    ],
+    aiProviderId: "openai",
+    aiApiKeySet: false,
   }
 }
 

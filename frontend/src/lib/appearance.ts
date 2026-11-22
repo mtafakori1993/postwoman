@@ -34,20 +34,19 @@ export const EDITOR_FONT_LABELS: Record<string, string> = {
 }
 
 /**
- * Interface typefaces. Open Sans (the bundled Bold face) is the default; the
- * others remain available in Settings → Appearance.
+ * Interface typefaces. The default is the operating system's own UI font so
+ * text keeps its natural weight and proportions; Source Code Pro remains
+ * available for users who prefer a monospace interface.
  */
-export const DEFAULT_UI_FONT = "open-sans"
+export const DEFAULT_UI_FONT = "system"
 
 export const UI_FONTS: Record<string, string> = {
-  "open-sans": "\"Open Sans\", Inter, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
-  system: "Inter, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+  system: "system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
   "source-code-pro": "\"Source Code Pro\", ui-monospace, \"JetBrains Mono\", \"Fira Code\", monospace",
 }
 
 export const UI_FONT_LABELS: Record<string, string> = {
-  "open-sans": "Open Sans (default)",
-  system: "System UI",
+  system: "System UI (default)",
   "source-code-pro": "Source Code Pro (monospace)",
 }
 
@@ -73,7 +72,7 @@ export function applyEditorFont(root: HTMLElement, family: string) {
   root.style.setProperty("--pw-editor-font", EDITOR_FONTS[family] ?? EDITOR_FONTS.mono)
 }
 
-/** Apply the interface typeface (Open Sans by default). */
+/** Apply the interface typeface (the platform system sans by default). */
 export function applyUiFont(root: HTMLElement, font: string) {
   root.style.setProperty("--pw-ui-font", UI_FONTS[font] ?? UI_FONTS[DEFAULT_UI_FONT])
   root.dataset.uiFont = font

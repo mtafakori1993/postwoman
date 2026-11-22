@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Keyboard, Link, Menu, Search, Moon, Sun, Plus, Play, Sparkles, Terminal, Upload } from "lucide-react"
+import { Keyboard, Link, Menu, Search, Moon, Sun, Plus, Play, Sparkles, Terminal, Upload, Compass } from "lucide-react"
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip"
 import { useWorkspaceStore } from "@/stores/workspace"
 import { Logo } from "@/components/ui/logo"
@@ -22,9 +22,10 @@ interface TopBarProps {
   onImportCurl: () => void
   onOpenShortcuts: () => void
   onOpenAI: () => void
+  onOpenDiscovery: () => void
 }
 
-export function TopBar({ onNewTab, onSearch, onOpenRunner, onImport, onImportUrl, onImportCurl, onOpenShortcuts, onOpenAI }: TopBarProps) {
+export function TopBar({ onNewTab, onSearch, onOpenRunner, onImport, onImportUrl, onImportCurl, onOpenShortcuts, onOpenAI, onOpenDiscovery }: TopBarProps) {
   const {
     settings,
     updateSettings,
@@ -147,6 +148,15 @@ export function TopBar({ onNewTab, onSearch, onOpenRunner, onImport, onImportUrl
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">Collection runner</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={onOpenDiscovery} aria-label="API discovery agent">
+                <Compass className="h-5 w-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">API discovery agent</TooltipContent>
           </Tooltip>
 
           <Tooltip>

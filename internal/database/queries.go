@@ -102,6 +102,15 @@ func mergeSettings(base, stored model.AppSettings) model.AppSettings {
 	base.SendNoCacheHeader = stored.SendNoCacheHeader
 	base.CompactMode = stored.CompactMode
 	base.AIEnabled = stored.AIEnabled
+	if stored.AITemperature > 0 {
+		base.AITemperature = stored.AITemperature
+	}
+	if stored.AIMaxTokens > 0 {
+		base.AIMaxTokens = stored.AIMaxTokens
+	}
+	if stored.AITimeoutSeconds > 0 {
+		base.AITimeoutSeconds = stored.AITimeoutSeconds
+	}
 	if stored.AccentColor != "" {
 		base.AccentColor = stored.AccentColor
 	}
@@ -127,16 +136,60 @@ func mergeSettings(base, stored model.AppSettings) model.AppSettings {
 	// unconditionally would be indistinguishable from "not set", so only an
 	// explicit non-empty value replaces the default (which is empty anyway).
 	base.AIAPIKey = stored.AIAPIKey
+	if stored.AIProviderID != "" {
+		base.AIProviderID = stored.AIProviderID
+	}
+	if len(stored.AIProviders) > 0 {
+		base.AIProviders = stored.AIProviders
+	}
+	// Older installs only stored the flat provider fields; materialise them as
+	// the first provider entry so the unified settings screen has something to
+	// edit, and keep the legacy selector in sync.
+	if len(base.AIProviders) == 0 {
+		base.AIProviders = []model.AIProviderConfig{{
+			ID:             orSettingDefault(base.AIProvider, "openai"),
+			Name:           orSettingDefault(base.AIProvider, "OpenAI"),
+			Kind:           orSettingDefault(base.AIProvider, "openai"),
+			BaseURL:        base.AIBaseURL,
+			APIKey:         base.AIAPIKey,
+			Model:          base.AIModel,
+			Temperature:    base.AITemperature,
+			MaxTokens:      base.AIMaxTokens,
+			TimeoutSeconds: base.AITimeoutSeconds,
+		}}
+	}
+	if base.AIProviderID == "" {
+		base.AIProviderID = base.AIProviders[0].ID
+	}
+	active := base.ActiveAIProvider()
+	base.AIProvider = active.Kind
+	base.AIBaseURL = active.BaseURL
+	base.AIModel = active.Model
+	if active.Temperature > 0 {
+		base.AITemperature = active.Temperature
+	}
+	if active.MaxTokens > 0 {
+		base.AIMaxTokens = active.MaxTokens
+	}
+	if active.TimeoutSeconds > 0 {
+		base.AITimeoutSeconds = active.TimeoutSeconds
+	}
+	if active.APIKey != "" {
+		base.AIAPIKey = active.APIKey
+	}
 	// --- migrations for changed defaults ------------------------------------
-	// v1.3.3 changed the interface default to Open Sans at 15 px. Values that
-	// are exactly a previous default (13/16 px, "system") are treated as unset
-	// so the new default reaches existing installations, while any other value
-	// is kept as a deliberate user choice.
+	// v1.3.3 changed the interface size default to 15 px. Sizes that are exactly
+	// a previous default (13/16 px) are treated as unset so the new default
+	// reaches existing installations; any other size is a deliberate choice.
 	if stored.FontSize == 13 || stored.FontSize == 16 {
 		base.FontSize = 15
 	}
-	if stored.UIFont == "system" {
-		base.UIFont = "open-sans"
+	// v1.3.4 removed the Bold-only "Open Sans" interface face (it forced every
+	// normal-weight label into a bold face, distorting the typography) and went
+	// back to the platform's natural system sans. Existing installs that were
+	// migrated to "open-sans" are moved back; deliberate choices are kept.
+	if stored.UIFont == "open-sans" {
+		base.UIFont = "system"
 	}
 	base.Proxy = stored.Proxy
 	if stored.DefaultHeaders != nil {
@@ -150,6 +203,13 @@ func mergeSettings(base, stored model.AppSettings) model.AppSettings {
 
 func (r *Repository) SaveSettingsModel(ctx context.Context, settings model.AppSettings) error {
 	return r.SetSetting(ctx, "app", settings)
+}
+
+func orSettingDefault(value, fallback string) string {
+	if value != "" {
+		return value
+	}
+	return fallback
 }
 
 // Search performs a case-insensitive search across collections, folders,

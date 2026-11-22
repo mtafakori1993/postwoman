@@ -5,9 +5,10 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
-import { AlertTriangle, Check, Keyboard, Minus, Plus, RotateCcw, Sparkles } from "lucide-react"
+import { AlertTriangle, Check, Keyboard, Minus, Plus, RotateCcw } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useWorkspaceStore } from "@/stores/workspace"
+import { AISettingsSection } from "./AISettingsSection"
 import {
   ACCENTS,
   ACCENT_LABELS,
@@ -166,7 +167,7 @@ export function SettingsPanel() {
           </div>
           <div className="flex items-center justify-between gap-2">
             <span>Interface font</span>
-            <Select value={settings.uiFont || "open-sans"} onValueChange={(v) => updateSettings({ uiFont: v })}>
+            <Select value={UI_FONTS[settings.uiFont] ? settings.uiFont : "system"} onValueChange={(v) => updateSettings({ uiFont: v })}>
               <SelectTrigger className="h-8 w-[190px]">
                 <SelectValue />
               </SelectTrigger>
@@ -365,57 +366,7 @@ export function SettingsPanel() {
 
         <Separator />
 
-        <section className="space-y-2">
-          <Label className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
-            <Sparkles className="h-3.5 w-3.5" /> AI assistant (optional)
-          </Label>
-          <label className="flex items-center justify-between gap-2 cursor-pointer">
-            <span>Enable AI assistant</span>
-            <Checkbox checked={!!settings.aiEnabled} onCheckedChange={(c) => updateSettings({ aiEnabled: c === true })} />
-          </label>
-          <div className="flex items-center justify-between gap-2">
-            <span>Provider</span>
-            <Select value={settings.aiProvider || "openai"} onValueChange={(v) => updateSettings({ aiProvider: v })}>
-              <SelectTrigger className="h-8 w-[150px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="openai">OpenAI-compatible</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <span className="text-xs text-muted-foreground">Base URL</span>
-            <Input
-              value={settings.aiBaseUrl || ""}
-              onChange={(e) => updateSettings({ aiBaseUrl: e.target.value })}
-              placeholder="https://api.openai.com/v1"
-              className="mt-1 h-8 font-mono text-xs"
-            />
-          </div>
-          <div>
-            <span className="text-xs text-muted-foreground">Model</span>
-            <Input
-              value={settings.aiModel || ""}
-              onChange={(e) => updateSettings({ aiModel: e.target.value })}
-              placeholder="gpt-4o-mini"
-              className="mt-1 h-8 font-mono text-xs"
-            />
-          </div>
-          <div>
-            <span className="text-xs text-muted-foreground">API key</span>
-            <Input
-              type="password"
-              value={settings.aiApiKey || ""}
-              onChange={(e) => updateSettings({ aiApiKey: e.target.value })}
-              placeholder="sk-…"
-              className="mt-1 h-8 font-mono text-xs"
-            />
-          </div>
-          <p className="pw-text-2xs text-muted-foreground">
-            Data is only sent when you explicitly run a prompt from the AI assistant. Keys are stored locally with your app settings.
-          </p>
-        </section>
+        <AISettingsSection />
 
         <Separator />
 

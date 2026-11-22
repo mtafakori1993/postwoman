@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -218,5 +220,122 @@ func TestSettingsAndTabsPersist(t *testing.T) {
 	tabs, err := app.GetTabs()
 	if err != nil || len(tabs) != 1 || tabs[0].Title != "Tab one" {
 		t.Fatalf("tabs did not persist: %v %+v", err, tabs)
+	}
+}
+func writeAppFixture(t *testing.T, root, rel, content string) {
+	t.Helper()
+	full := filepath.Join(root, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", rel, err)
+	}
+	if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+		t.Fatalf("write %s: %v", rel, err)
+	}
+}
+
+func waitForDiscovery(t *testing.T, app *App, sessionID string) *model.DiscoverySession {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		session, err := app.DiscoveryGet(sessionID)
+		if err != nil {
+			t.Fatalf("discovery get: %v", err)
+		}
+		if session.Status != "running" && session.Status != "cancelling" {
+			return session
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatalf("discovery session %s did not finish in time", sessionID)
+	return nil
+}
+
+// TestDiscoveryEndToEnd scans a project, imports the reviewed endpoints and
+// verifies that the generated requests are persisted as a native collection.
+func TestDiscoveryEndToEnd(t *testing.T) {
+	app := newTestApp(t)
+
+	root := t.TempDir()
+	writeAppFixture(t, root, "package.json", `{"dependencies":{"express":"^4.18.0"}}`)
+	writeAppFixture(t, root, "routes.js", `const express = require('express')
+const router = express.Router()
+
+router.get('/health', health)
+router.post('/users', createUser)
+
+module.exports = router
+`)
+
+	sessionID, err := app.DiscoveryStart(model.DiscoveryOptions{
+		Directory:        root,
+		CollectionName:   "Imported Fixture",
+		BaseURL:          "https://api.example.com",
+		RespectGitignore: true,
+		UseAI:            false,
+		MaxFiles:         50,
+		MaxFileSizeKB:    256,
+	})
+	if err != nil {
+		t.Fatalf("start discovery: %v", err)
+	}
+
+	session := waitForDiscovery(t, app, sessionID)
+	if session.Status != "completed" {
+		t.Fatalf("expected completed discovery, got %q (%s)", session.Status, session.Error)
+	}
+	if len(session.Endpoints) < 2 {
+		t.Fatalf("expected at least two endpoints, got %v", session.Endpoints)
+	}
+	if warnings, err := app.DiscoveryValidate(session.Collection); err != nil {
+		t.Fatalf("preview validation: %v", err)
+	} else if len(warnings) > 0 {
+		t.Logf("preview warnings: %v", warnings)
+	}
+
+	summary, err := app.DiscoveryImport(model.DiscoveryGenerateRequest{
+		SessionID:      sessionID,
+		CollectionName: "Imported Fixture",
+		BaseURL:        "https://api.example.com",
+	})
+	if err != nil {
+		t.Fatalf("import discovery: %v", err)
+	}
+	if len(summary.Collections) != 1 || summary.Collections[0] != "Imported Fixture" {
+		t.Fatalf("unexpected import summary: %+v", summary)
+	}
+
+	collections, err := app.GetCollections("")
+	if err != nil {
+		t.Fatalf("list collections: %v", err)
+	}
+	var imported *model.Collection
+	for i := range collections {
+		if collections[i].Info.Name == "Imported Fixture" {
+			imported = &collections[i]
+			break
+		}
+	}
+	if imported == nil {
+		t.Fatalf("imported collection not found in %d collections", len(collections))
+	}
+
+	requests, err := app.GetRequests(imported.ID, "")
+	if err != nil {
+		t.Fatalf("list requests: %v", err)
+	}
+	if len(requests) != len(session.Endpoints) {
+		t.Fatalf("expected %d requests, got %d", len(session.Endpoints), len(requests))
+	}
+	foundHealth := false
+	for _, request := range requests {
+		if !strings.HasPrefix(request.URL, "{{baseUrl}}") {
+			t.Errorf("request %q is not environment-agnostic: %s", request.Name, request.URL)
+		}
+		if request.Method == "GET" && strings.HasSuffix(request.URL, "/health") {
+			foundHealth = true
+		}
+	}
+	if !foundHealth {
+		t.Errorf("GET /health request was not imported: %+v", requests)
 	}
 }

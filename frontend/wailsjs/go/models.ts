@@ -1,5 +1,211 @@
 export namespace model {
 	
+	export class AIConnectionTest {
+	    ok: boolean;
+	    message: string;
+	    latencyMs: number;
+	    provider?: string;
+	    model?: string;
+	    models?: string[];
+	    details?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIConnectionTest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.message = source["message"];
+	        this.latencyMs = source["latencyMs"];
+	        this.provider = source["provider"];
+	        this.model = source["model"];
+	        this.models = source["models"];
+	        this.details = source["details"];
+	    }
+	}
+	export class AIModelList {
+	    provider: string;
+	    models: string[];
+	    warning?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIModelList(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.provider = source["provider"];
+	        this.models = source["models"];
+	        this.warning = source["warning"];
+	    }
+	}
+	export class KeyValue {
+	    key: string;
+	    value: string;
+	    description?: string;
+	    enabled: boolean;
+	    type?: string;
+	    src?: string;
+	    fileName?: string;
+	    contentType?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new KeyValue(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.value = source["value"];
+	        this.description = source["description"];
+	        this.enabled = source["enabled"];
+	        this.type = source["type"];
+	        this.src = source["src"];
+	        this.fileName = source["fileName"];
+	        this.contentType = source["contentType"];
+	    }
+	}
+	export class AIProviderConfig {
+	    id: string;
+	    name: string;
+	    kind: string;
+	    baseUrl: string;
+	    apiKey?: string;
+	    apiKeySet?: boolean;
+	    model: string;
+	    models?: string[];
+	    temperature: number;
+	    maxTokens: number;
+	    timeoutSeconds: number;
+	    custom?: boolean;
+	    extraHeaders?: KeyValue[];
+	    apiVersion?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIProviderConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.kind = source["kind"];
+	        this.baseUrl = source["baseUrl"];
+	        this.apiKey = source["apiKey"];
+	        this.apiKeySet = source["apiKeySet"];
+	        this.model = source["model"];
+	        this.models = source["models"];
+	        this.temperature = source["temperature"];
+	        this.maxTokens = source["maxTokens"];
+	        this.timeoutSeconds = source["timeoutSeconds"];
+	        this.custom = source["custom"];
+	        this.extraHeaders = this.convertValues(source["extraHeaders"], KeyValue);
+	        this.apiVersion = source["apiVersion"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AIProviderDescriptor {
+	    kind: string;
+	    label: string;
+	    description?: string;
+	    defaultBaseUrl: string;
+	    defaultModel: string;
+	    suggestedModels: string[];
+	    requiresApiKey: boolean;
+	    supportsModelList: boolean;
+	    supportsTemperature: boolean;
+	    supportsMaxTokens: boolean;
+	    docsUrl?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIProviderDescriptor(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.label = source["label"];
+	        this.description = source["description"];
+	        this.defaultBaseUrl = source["defaultBaseUrl"];
+	        this.defaultModel = source["defaultModel"];
+	        this.suggestedModels = source["suggestedModels"];
+	        this.requiresApiKey = source["requiresApiKey"];
+	        this.supportsModelList = source["supportsModelList"];
+	        this.supportsTemperature = source["supportsTemperature"];
+	        this.supportsMaxTokens = source["supportsMaxTokens"];
+	        this.docsUrl = source["docsUrl"];
+	    }
+	}
+	export class AIRequest {
+	    prompt: string;
+	    requestJson?: string;
+	    responseBody?: string;
+	    systemPrompt?: string;
+	    model?: string;
+	    temperature?: number;
+	    maxTokens?: number;
+	    jsonMode?: boolean;
+	    purpose?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.prompt = source["prompt"];
+	        this.requestJson = source["requestJson"];
+	        this.responseBody = source["responseBody"];
+	        this.systemPrompt = source["systemPrompt"];
+	        this.model = source["model"];
+	        this.temperature = source["temperature"];
+	        this.maxTokens = source["maxTokens"];
+	        this.jsonMode = source["jsonMode"];
+	        this.purpose = source["purpose"];
+	    }
+	}
+	export class AIStatus {
+	    enabled: boolean;
+	    ready: boolean;
+	    provider?: string;
+	    model?: string;
+	    kind?: string;
+	    baseUrl?: string;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.ready = source["ready"];
+	        this.provider = source["provider"];
+	        this.model = source["model"];
+	        this.kind = source["kind"];
+	        this.baseUrl = source["baseUrl"];
+	        this.message = source["message"];
+	    }
+	}
 	export class APIKeyAuth {
 	    key: string;
 	    value: string;
@@ -34,32 +240,6 @@ export namespace model {
 	        this.sessionToken = source["sessionToken"];
 	        this.region = source["region"];
 	        this.service = source["service"];
-	    }
-	}
-	export class KeyValue {
-	    key: string;
-	    value: string;
-	    description?: string;
-	    enabled: boolean;
-	    type?: string;
-	    src?: string;
-	    fileName?: string;
-	    contentType?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new KeyValue(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.key = source["key"];
-	        this.value = source["value"];
-	        this.description = source["description"];
-	        this.enabled = source["enabled"];
-	        this.type = source["type"];
-	        this.src = source["src"];
-	        this.fileName = source["fileName"];
-	        this.contentType = source["contentType"];
 	    }
 	}
 	export class Proxy {
@@ -102,16 +282,23 @@ export namespace model {
 	    keyboardShortcuts: Record<string, string>;
 	    followRedirects: boolean;
 	    sendNoCacheHeader: boolean;
-    accentColor: string;
-    editorFontFamily: string;
-    uiFont: string;
-    compactMode: boolean;
-    layoutPreset: string;
-    aiEnabled: boolean;
-    aiProvider: string;
-    aiBaseUrl: string;
-    aiApiKey: string;
-    aiModel: string;
+	    accentColor: string;
+	    editorFontFamily: string;
+	    uiFont: string;
+	    compactMode: boolean;
+	    layoutPreset: string;
+	    aiEnabled: boolean;
+	    aiProvider: string;
+	    aiBaseUrl: string;
+	    aiApiKey: string;
+	    aiModel: string;
+	    aiTemperature: number;
+	    aiMaxTokens: number;
+	    aiTimeoutSeconds: number;
+	    aiProviders: AIProviderConfig[];
+	    aiProviderId: string;
+	    aiApiKeySet: boolean;
+	    aiClearApiKey?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppSettings(source);
@@ -136,16 +323,23 @@ export namespace model {
 	        this.keyboardShortcuts = source["keyboardShortcuts"];
 	        this.followRedirects = source["followRedirects"];
 	        this.sendNoCacheHeader = source["sendNoCacheHeader"];
-        this.accentColor = source["accentColor"];
-        this.editorFontFamily = source["editorFontFamily"];
-        this.uiFont = source["uiFont"];
-        this.compactMode = source["compactMode"];
-        this.layoutPreset = source["layoutPreset"];
-        this.aiEnabled = source["aiEnabled"];
-        this.aiProvider = source["aiProvider"];
-        this.aiBaseUrl = source["aiBaseUrl"];
-        this.aiApiKey = source["aiApiKey"];
-        this.aiModel = source["aiModel"];
+	        this.accentColor = source["accentColor"];
+	        this.editorFontFamily = source["editorFontFamily"];
+	        this.uiFont = source["uiFont"];
+	        this.compactMode = source["compactMode"];
+	        this.layoutPreset = source["layoutPreset"];
+	        this.aiEnabled = source["aiEnabled"];
+	        this.aiProvider = source["aiProvider"];
+	        this.aiBaseUrl = source["aiBaseUrl"];
+	        this.aiApiKey = source["aiApiKey"];
+	        this.aiModel = source["aiModel"];
+	        this.aiTemperature = source["aiTemperature"];
+	        this.aiMaxTokens = source["aiMaxTokens"];
+	        this.aiTimeoutSeconds = source["aiTimeoutSeconds"];
+	        this.aiProviders = this.convertValues(source["aiProviders"], AIProviderConfig);
+	        this.aiProviderId = source["aiProviderId"];
+	        this.aiApiKeySet = source["aiApiKeySet"];
+	        this.aiClearApiKey = source["aiClearApiKey"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -886,13 +1080,13 @@ export namespace model {
 	    tokenUrl: string;
 	    scope: string;
 	    redirectUrl: string;
-    expiresAt?: number;
-    tokenType?: string;
-    pkce?: boolean;
-    codeVerifier?: string;
-    state?: string;
 	    username?: string;
 	    password?: string;
+	    expiresAt?: number;
+	    tokenType?: string;
+	    pkce?: boolean;
+	    codeVerifier?: string;
+	    state?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new OAuth2Auth(source);
@@ -909,13 +1103,13 @@ export namespace model {
 	        this.tokenUrl = source["tokenUrl"];
 	        this.scope = source["scope"];
 	        this.redirectUrl = source["redirectUrl"];
-        this.expiresAt = source["expiresAt"];
-        this.tokenType = source["tokenType"];
-        this.pkce = source["pkce"];
-        this.codeVerifier = source["codeVerifier"];
-        this.state = source["state"];
 	        this.username = source["username"];
 	        this.password = source["password"];
+	        this.expiresAt = source["expiresAt"];
+	        this.tokenType = source["tokenType"];
+	        this.pkce = source["pkce"];
+	        this.codeVerifier = source["codeVerifier"];
+	        this.state = source["state"];
 	    }
 	}
 	export class OAuth1Auth {
@@ -1211,7 +1405,502 @@ export namespace model {
 	
 	
 	
+	export class DiscoverySchemaField {
+	    name: string;
+	    type: string;
+	    required: boolean;
+	    example?: string;
+	    description?: string;
+	    children?: DiscoverySchemaField[];
 	
+	    static createFrom(source: any = {}) {
+	        return new DiscoverySchemaField(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.type = source["type"];
+	        this.required = source["required"];
+	        this.example = source["example"];
+	        this.description = source["description"];
+	        this.children = this.convertValues(source["children"], DiscoverySchemaField);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class DiscoveryParam {
+	    name: string;
+	    in: string;
+	    type?: string;
+	    required: boolean;
+	    description?: string;
+	    example?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DiscoveryParam(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.in = source["in"];
+	        this.type = source["type"];
+	        this.required = source["required"];
+	        this.description = source["description"];
+	        this.example = source["example"];
+	    }
+	}
+	export class DiscoveredEndpoint {
+	    id: string;
+	    method: string;
+	    path: string;
+	    name: string;
+	    description?: string;
+	    sourceFile?: string;
+	    line?: number;
+	    handler?: string;
+	    handlerFile?: string;
+	    controller?: string;
+	    folder: string;
+	    tags?: string[];
+	    authRequired: boolean;
+	    authType?: string;
+	    authNotes?: string;
+	    contentType?: string;
+	    headers?: DiscoveryParam[];
+	    pathParams?: DiscoveryParam[];
+	    queryParams?: DiscoveryParam[];
+	    requestBody?: string;
+	    requestSchema?: DiscoverySchemaField[];
+	    responseSchema?: DiscoverySchemaField[];
+	    statusCodes?: number[];
+	    related?: string[];
+	    confidence: number;
+	    notes?: string[];
+	    warnings?: string[];
+	    origin: string;
+	    framework?: string;
+	    selected: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new DiscoveredEndpoint(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.method = source["method"];
+	        this.path = source["path"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.sourceFile = source["sourceFile"];
+	        this.line = source["line"];
+	        this.handler = source["handler"];
+	        this.handlerFile = source["handlerFile"];
+	        this.controller = source["controller"];
+	        this.folder = source["folder"];
+	        this.tags = source["tags"];
+	        this.authRequired = source["authRequired"];
+	        this.authType = source["authType"];
+	        this.authNotes = source["authNotes"];
+	        this.contentType = source["contentType"];
+	        this.headers = this.convertValues(source["headers"], DiscoveryParam);
+	        this.pathParams = this.convertValues(source["pathParams"], DiscoveryParam);
+	        this.queryParams = this.convertValues(source["queryParams"], DiscoveryParam);
+	        this.requestBody = source["requestBody"];
+	        this.requestSchema = this.convertValues(source["requestSchema"], DiscoverySchemaField);
+	        this.responseSchema = this.convertValues(source["responseSchema"], DiscoverySchemaField);
+	        this.statusCodes = source["statusCodes"];
+	        this.related = source["related"];
+	        this.confidence = source["confidence"];
+	        this.notes = source["notes"];
+	        this.warnings = source["warnings"];
+	        this.origin = source["origin"];
+	        this.framework = source["framework"];
+	        this.selected = source["selected"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class DiscoveryDirEntry {
+	    name: string;
+	    path: string;
+	    isDir: boolean;
+	    size: number;
+	    excluded: boolean;
+	    reason?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DiscoveryDirEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.isDir = source["isDir"];
+	        this.size = source["size"];
+	        this.excluded = source["excluded"];
+	        this.reason = source["reason"];
+	    }
+	}
+	export class DiscoveryDirListing {
+	    path: string;
+	    parent?: string;
+	    entries: DiscoveryDirEntry[];
+	
+	    static createFrom(source: any = {}) {
+	        return new DiscoveryDirListing(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.parent = source["parent"];
+	        this.entries = this.convertValues(source["entries"], DiscoveryDirEntry);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class DiscoveryEndpointEdit {
+	    id: string;
+	    selected: boolean;
+	    name: string;
+	    description: string;
+	    folder: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DiscoveryEndpointEdit(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.selected = source["selected"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.folder = source["folder"];
+	    }
+	}
+	export class DiscoveryFileInfo {
+	    path: string;
+	    language: string;
+	    category: string;
+	    bytes: number;
+	    lines: number;
+	    hasRoutes: boolean;
+	    analyzed: boolean;
+	    sentToAi: boolean;
+	    skipped?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DiscoveryFileInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.language = source["language"];
+	        this.category = source["category"];
+	        this.bytes = source["bytes"];
+	        this.lines = source["lines"];
+	        this.hasRoutes = source["hasRoutes"];
+	        this.analyzed = source["analyzed"];
+	        this.sentToAi = source["sentToAi"];
+	        this.skipped = source["skipped"];
+	    }
+	}
+	export class DiscoveryGenerateRequest {
+	    sessionId: string;
+	    collectionName: string;
+	    baseUrl: string;
+	    endpoints: DiscoveryEndpointEdit[];
+	
+	    static createFrom(source: any = {}) {
+	        return new DiscoveryGenerateRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.collectionName = source["collectionName"];
+	        this.baseUrl = source["baseUrl"];
+	        this.endpoints = this.convertValues(source["endpoints"], DiscoveryEndpointEdit);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class DiscoveryOptions {
+	    directory: string;
+	    collectionName: string;
+	    baseUrl: string;
+	    excludePatterns: string[];
+	    includeTests: boolean;
+	    respectGitignore: boolean;
+	    useAi: boolean;
+	    maxFiles: number;
+	    maxFileSizeKb: number;
+	    maxAiFiles: number;
+	    languageHint?: string;
+	    frameworkHint?: string;
+	    followSymlinks: boolean;
+	    includeHidden: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new DiscoveryOptions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.directory = source["directory"];
+	        this.collectionName = source["collectionName"];
+	        this.baseUrl = source["baseUrl"];
+	        this.excludePatterns = source["excludePatterns"];
+	        this.includeTests = source["includeTests"];
+	        this.respectGitignore = source["respectGitignore"];
+	        this.useAi = source["useAi"];
+	        this.maxFiles = source["maxFiles"];
+	        this.maxFileSizeKb = source["maxFileSizeKb"];
+	        this.maxAiFiles = source["maxAiFiles"];
+	        this.languageHint = source["languageHint"];
+	        this.frameworkHint = source["frameworkHint"];
+	        this.followSymlinks = source["followSymlinks"];
+	        this.includeHidden = source["includeHidden"];
+	    }
+	}
+	
+	export class DiscoveryProgress {
+	    sessionId: string;
+	    stage: string;
+	    message: string;
+	    percent: number;
+	    current?: string;
+	    filesSeen: number;
+	    endpoints: number;
+	    done: boolean;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DiscoveryProgress(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.stage = source["stage"];
+	        this.message = source["message"];
+	        this.percent = source["percent"];
+	        this.current = source["current"];
+	        this.filesSeen = source["filesSeen"];
+	        this.endpoints = source["endpoints"];
+	        this.done = source["done"];
+	        this.error = source["error"];
+	    }
+	}
+	
+	export class DiscoveryStats {
+	    filesSeen: number;
+	    filesAnalyzed: number;
+	    filesSkipped: number;
+	    bytesScanned: number;
+	    routeFiles: number;
+	    endpoints: number;
+	    highConfidence: number;
+	    lowConfidence: number;
+	    aiFilesSent: number;
+	    openApiSources: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DiscoveryStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.filesSeen = source["filesSeen"];
+	        this.filesAnalyzed = source["filesAnalyzed"];
+	        this.filesSkipped = source["filesSkipped"];
+	        this.bytesScanned = source["bytesScanned"];
+	        this.routeFiles = source["routeFiles"];
+	        this.endpoints = source["endpoints"];
+	        this.highConfidence = source["highConfidence"];
+	        this.lowConfidence = source["lowConfidence"];
+	        this.aiFilesSent = source["aiFilesSent"];
+	        this.openApiSources = source["openApiSources"];
+	    }
+	}
+	export class DiscoverySession {
+	    id: string;
+	    status: string;
+	    options: DiscoveryOptions;
+	    root: string;
+	    projectName: string;
+	    languages: string[];
+	    frameworks: string[];
+	    stats: DiscoveryStats;
+	    files: DiscoveryFileInfo[];
+	    endpoints: DiscoveredEndpoint[];
+	    folders: string[];
+	    warnings: string[];
+	    progress: DiscoveryProgress;
+	    startedAt: number;
+	    finishedAt?: number;
+	    error?: string;
+	    aiSummary?: string;
+	    collectionJson?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DiscoverySession(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.status = source["status"];
+	        this.options = this.convertValues(source["options"], DiscoveryOptions);
+	        this.root = source["root"];
+	        this.projectName = source["projectName"];
+	        this.languages = source["languages"];
+	        this.frameworks = source["frameworks"];
+	        this.stats = this.convertValues(source["stats"], DiscoveryStats);
+	        this.files = this.convertValues(source["files"], DiscoveryFileInfo);
+	        this.endpoints = this.convertValues(source["endpoints"], DiscoveredEndpoint);
+	        this.folders = source["folders"];
+	        this.warnings = source["warnings"];
+	        this.progress = this.convertValues(source["progress"], DiscoveryProgress);
+	        this.startedAt = source["startedAt"];
+	        this.finishedAt = source["finishedAt"];
+	        this.error = source["error"];
+	        this.aiSummary = source["aiSummary"];
+	        this.collectionJson = source["collectionJson"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class DiscoverySourceFile {
+	    path: string;
+	    language: string;
+	    startLine: number;
+	    endLine: number;
+	    totalLines: number;
+	    content: string;
+	    truncated: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new DiscoverySourceFile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.language = source["language"];
+	        this.startLine = source["startLine"];
+	        this.endLine = source["endLine"];
+	        this.totalLines = source["totalLines"];
+	        this.content = source["content"];
+	        this.truncated = source["truncated"];
+	    }
+	}
+	
+	
+	export class ExtractionResult {
+	    path: string;
+	    type: string;
+	    value: string;
+	    display: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExtractionResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.type = source["type"];
+	        this.value = source["value"];
+	        this.display = source["display"];
+	    }
+	}
 	
 	
 	
@@ -1315,6 +2004,69 @@ export namespace model {
 		    return a;
 		}
 	}
+	export class JSONDiffEntry {
+	    path: string;
+	    kind: string;
+	    left?: string;
+	    right?: string;
+	    leftType?: string;
+	    rightType?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new JSONDiffEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.kind = source["kind"];
+	        this.left = source["left"];
+	        this.right = source["right"];
+	        this.leftType = source["leftType"];
+	        this.rightType = source["rightType"];
+	    }
+	}
+	export class JSONDiff {
+	    equal: boolean;
+	    added: number;
+	    removed: number;
+	    changed: number;
+	    truncated: boolean;
+	    entries: JSONDiffEntry[];
+	
+	    static createFrom(source: any = {}) {
+	        return new JSONDiff(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.equal = source["equal"];
+	        this.added = source["added"];
+	        this.removed = source["removed"];
+	        this.changed = source["changed"];
+	        this.truncated = source["truncated"];
+	        this.entries = this.convertValues(source["entries"], JSONDiffEntry);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	
 	
 	export class MockRequestLog {
@@ -1364,6 +2116,38 @@ export namespace model {
 	
 	
 	
+	export class OAuth2StartResult {
+	    auth?: OAuth2Auth;
+	    url: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new OAuth2StartResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.auth = this.convertValues(source["auth"], OAuth2Auth);
+	        this.url = source["url"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	
 	
 	
@@ -1508,6 +2292,38 @@ export namespace model {
 		}
 	}
 	
+	export class StoredCookie {
+	    url: string;
+	    cookie: Cookie;
+	
+	    static createFrom(source: any = {}) {
+	        return new StoredCookie(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.url = source["url"];
+	        this.cookie = this.convertValues(source["cookie"], Cookie);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	
 	
 	
@@ -1575,183 +2391,6 @@ export namespace model {
 		}
 	}
 	
-
-
-	export class ExtractionResult {
-	    path: string;
-	    type: string;
-	    value: string;
-	    display: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new ExtractionResult(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.path = source["path"];
-	        this.type = source["type"];
-	        this.value = source["value"];
-	        this.display = source["display"];
-	    }
-	}
-	export class JSONDiffEntry {
-	    path: string;
-	    kind: string;
-	    left?: string;
-	    right?: string;
-	    leftType?: string;
-	    rightType?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new JSONDiffEntry(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.path = source["path"];
-	        this.kind = source["kind"];
-	        this.left = source["left"];
-	        this.right = source["right"];
-	        this.leftType = source["leftType"];
-	        this.rightType = source["rightType"];
-	    }
-	}
-	export class JSONDiff {
-	    equal: boolean;
-	    added: number;
-	    removed: number;
-	    changed: number;
-	    truncated: boolean;
-	    entries: JSONDiffEntry[];
-	
-	    static createFrom(source: any = {}) {
-	        return new JSONDiff(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.equal = source["equal"];
-	        this.added = source["added"];
-	        this.removed = source["removed"];
-	        this.changed = source["changed"];
-	        this.truncated = source["truncated"];
-	        this.entries = this.convertValues(source["entries"], JSONDiffEntry);
-	    }
-	
-		convertValues(value: any, classs: any, asMap: boolean = false): any {
-		    if (!value) return value;
-		    if (asMap) {
-		        for (const key of Object.keys(value)) {
-		            value[key] = new classs(value[key]);
-		        }
-		        return value;
-		    }
-		    if (Array.isArray(value)) {
-		        if (!Array.isArray(classs)) return value;
-		        const a = [];
-		        for (const item of value) {
-		            a.push(new classs[0](item));
-		        }
-		        return a;
-		    }
-		    if ("object" === typeof value) {
-		        return new classs(value);
-		    }
-		    return value;
-		}
-	}
-	export class StoredCookie {
-	    url: string;
-	    cookie: Cookie;
-	
-	    static createFrom(source: any = {}) {
-	        return new StoredCookie(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.url = source["url"];
-	        this.cookie = this.convertValues(source["cookie"], Cookie);
-	    }
-	
-		convertValues(value: any, classs: any, asMap: boolean = false): any {
-		    if (!value) return value;
-		    if (asMap) {
-		        for (const key of Object.keys(value)) {
-		            value[key] = new classs(value[key]);
-		        }
-		        return value;
-		    }
-		    if (Array.isArray(value)) {
-		        if (!Array.isArray(classs)) return value;
-		        const a = [];
-		        for (const item of value) {
-		            a.push(new classs[0](item));
-		        }
-		        return a;
-		    }
-		    if ("object" === typeof value) {
-		        return new classs(value);
-		    }
-		    return value;
-		}
-	}
-
-	export class AIRequest {
-	    prompt: string;
-	    requestJson?: string;
-	    responseBody?: string;
-	    systemPrompt?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new AIRequest(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.prompt = source["prompt"];
-	        this.requestJson = source["requestJson"];
-	        this.responseBody = source["responseBody"];
-	        this.systemPrompt = source["systemPrompt"];
-	    }
-	}
-	export class OAuth2StartResult {
-	    auth: OAuth2Auth;
-	    url: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new OAuth2StartResult(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.auth = this.convertValues(source["auth"], OAuth2Auth);
-	        this.url = source["url"];
-	    }
-	
-		convertValues(value: any, classs: any, asMap: boolean = false): any {
-		    if (!value) return value;
-		    if (asMap) {
-		        for (const key of Object.keys(value)) {
-		            value[key] = new classs(value[key]);
-		        }
-		        return value;
-		    }
-		    if (Array.isArray(value)) {
-		        if (!Array.isArray(classs)) return value;
-		        const a = [];
-		        for (const item of value) {
-		            a.push(new classs[0](item));
-		        }
-		        return a;
-		    }
-		    if ("object" === typeof value) {
-		        return new classs(value);
-		    }
-		    return value;
-		}
-	}
 
 }
 

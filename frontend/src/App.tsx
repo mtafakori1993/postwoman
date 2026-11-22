@@ -9,6 +9,7 @@ import { ShortcutsDialog } from "./components/ShortcutsDialog"
 import { CodeExportDialog } from "./components/CodeExportDialog"
 import { ImportCurlDialog } from "./components/ImportCurlDialog"
 import { AIAssistant } from "./components/AIAssistant"
+import { AIDiscoveryDialog } from "./components/AIDiscoveryDialog"
 import { RunnerDialog } from "./components/RunnerDialog"
 import { useWorkspaceStore, newRequestDraft } from "./stores/workspace"
 import * as api from "./lib/api"
@@ -68,6 +69,7 @@ function App() {
   const [curlOpen, setCurlOpen] = useState(false)
   const [codeOpen, setCodeOpen] = useState(false)
   const [aiOpen, setAiOpen] = useState(false)
+  const [discoveryOpen, setDiscoveryOpen] = useState(false)
   const [toast, setToast] = useState<{ kind: "info" | "error"; text: string } | null>(null)
   const [pendingClose, setPendingClose] = useState<{
     ids: string[]
@@ -156,7 +158,7 @@ function App() {
   useEffect(() => {
     const root = document.documentElement
     applyAccent(root, settings.accentColor || "orange")
-    applyUiFont(root, settings.uiFont || "open-sans")
+    applyUiFont(root, settings.uiFont || "system")
     applyEditorFont(root, settings.editorFontFamily || "mono")
     root.classList.toggle("pw-compact", !!settings.compactMode)
   }, [settings.accentColor, settings.uiFont, settings.editorFontFamily, settings.compactMode])
@@ -405,6 +407,7 @@ function App() {
           onImportCurl={() => setCurlOpen(true)}
           onOpenShortcuts={() => setShortcutsOpen(true)}
           onOpenAI={() => setAiOpen(true)}
+          onOpenDiscovery={() => setDiscoveryOpen(true)}
         />
 
         <RequestTabs
@@ -503,6 +506,7 @@ function App() {
         onOpenRunner={() => setRunnerOpen(true)}
         onOpenShortcuts={() => setShortcutsOpen(true)}
         onOpenAI={() => setAiOpen(true)}
+        onOpenDiscovery={() => setDiscoveryOpen(true)}
       />
       <RunnerDialog open={runnerOpen} onOpenChange={setRunnerOpen} />
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
@@ -515,6 +519,7 @@ function App() {
         }}
       />
       <AIAssistant open={aiOpen} onOpenChange={setAiOpen} request={activeRequest || null} response={activeResponse || null} />
+      <AIDiscoveryDialog open={discoveryOpen} onOpenChange={setDiscoveryOpen} />
 
       <Dialog open={pendingClose !== null} onOpenChange={(open) => !open && setPendingClose(null)}>
         <DialogContent className="max-w-md">

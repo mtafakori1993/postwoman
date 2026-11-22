@@ -581,6 +581,14 @@ type AIRequest struct {
 	RequestJSON  string `json:"requestJson,omitempty"`
 	ResponseBody string `json:"responseBody,omitempty"`
 	SystemPrompt string `json:"systemPrompt,omitempty"`
+	// Optional per-call overrides; the central settings remain authoritative
+	// for the provider, key and endpoint.
+	Model       string   `json:"model,omitempty"`
+	Temperature *float64 `json:"temperature,omitempty"`
+	MaxTokens   int      `json:"maxTokens,omitempty"`
+	JSONMode    bool     `json:"jsonMode,omitempty"`
+	// Purpose labels the call for logging (never includes prompt contents).
+	Purpose string `json:"purpose,omitempty"`
 }
 
 // OAuth2StartResult is returned when the authorization URL has been built. The
