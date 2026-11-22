@@ -6,12 +6,22 @@ yarn-debug.log
 yarn-error.log
 yarn.sass-cache
 
-# Builds
-build/
-bin/
+# Build outputs
+/bin/
+/build/bin/
+/build/windows/installer/tmp/
+/build/windows/installer/wails_tools.nsh
+/build/windows/portable/
+/dist/
+*.syso
+*-res.syso
 
-# Binaries
+# Generated installers / packages
 appimagetool
+squashfs-root/
+AppDir/
+postwoman_*.deb
+Postwoman-*-x86_64.AppImage
 
 # Environment
 .env

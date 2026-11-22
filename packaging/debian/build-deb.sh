@@ -16,16 +16,18 @@ cd "$ROOT"
 
 PKG="postwoman"
 ARCH="$(dpkg --print-architecture 2>/dev/null || echo amd64)"
-VERSION="$(sed -n 's/^const appVersion = "\(.*\)"/\1/p' app.go | head -1)"
+VERSION="$(tr -d '[:space:]' < VERSION)"
 if [ -z "$VERSION" ]; then
-  echo "error: could not read appVersion from app.go" >&2
+  echo "error: could not read VERSION" >&2
   exit 1
 fi
+OUT_DIR="${OUT_DIR:-.}"
+mkdir -p "$OUT_DIR"
 
 BIN="build/bin/Postwoman"
 if [ ! -x "$BIN" ]; then
   echo "==> $BIN not found, building it"
-  go build -tags desktop,production -ldflags "-w -s" -o "$BIN" .
+  go build -tags desktop,production,webkit2_41 -trimpath -ldflags "-w -s -X main.appVersion=$VERSION" -o "$BIN" .
 fi
 
 STAGE="$(mktemp -d)"
@@ -111,7 +113,7 @@ POSTRM
 chmod 0755 "$ROOTDIR/DEBIAN/postinst" "$ROOTDIR/DEBIAN/postrm"
 
 # --- build -------------------------------------------------------------------
-OUT="${PKG}_${VERSION}_${ARCH}.deb"
+OUT="${OUT_DIR}/${PKG}_${VERSION}_${ARCH}.deb"
 rm -f "$OUT"
 dpkg-deb --build --root-owner-group "$ROOTDIR" "$OUT" >/dev/null
 echo "==> built $OUT"

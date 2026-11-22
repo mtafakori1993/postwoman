@@ -15,8 +15,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-VERSION="$(sed -n 's/^const appVersion = "\(.*\)"/\1/p' app.go | head -1)"
-[ -n "$VERSION" ] || { echo "error: could not read appVersion from app.go" >&2; exit 1; }
+VERSION="$(tr -d '[:space:]' < VERSION)"
+[ -n "$VERSION" ] || { echo "error: could not read VERSION" >&2; exit 1; }
+OUT_DIR="${OUT_DIR:-.}"
+mkdir -p "$OUT_DIR"
 
 ARCH="x86_64"
 RUNTIME="packaging/appimage/runtime-x86_64"
@@ -25,7 +27,7 @@ RUNTIME="packaging/appimage/runtime-x86_64"
 BIN="build/bin/Postwoman"
 if [ ! -x "$BIN" ]; then
   echo "==> $BIN not found, building it"
-  go build -tags desktop,production -ldflags "-w -s" -o "$BIN" .
+  go build -tags desktop,production,webkit2_41 -trimpath -ldflags "-w -s -X main.appVersion=$VERSION" -o "$BIN" .
 fi
 
 echo "==> refreshing AppDir"
@@ -58,7 +60,7 @@ SQUASH="$(mktemp)"
 trap 'rm -f "$SQUASH"' EXIT
 mksquashfs AppDir "$SQUASH" -root-owned -noappend -comp gzip -no-progress >/dev/null
 
-OUT="Postwoman-${VERSION}-${ARCH}.AppImage"
+OUT="${OUT_DIR}/Postwoman-${VERSION}-${ARCH}.AppImage"
 rm -f "$OUT"
 cat "$RUNTIME" "$SQUASH" > "$OUT"
 chmod 0755 "$OUT"

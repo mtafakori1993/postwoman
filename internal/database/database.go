@@ -112,17 +112,88 @@ func IsForeignKeyError(err error) bool {
 	return false
 }
 
-// GetDBPath returns the platform data directory path for the database.
-func GetDBPath() string {
-	if runtime.GOOS == "linux" {
-		if xdgData := os.Getenv("XDG_DATA_HOME"); xdgData != "" {
-			return filepath.Join(xdgData, "Postwoman", "postwoman.db")
+const portableMarker = "portable.txt"
+
+// DataDir returns the platform-appropriate directory for Postwoman's local
+// data (SQLite database, WebView cache, cookies). The POSTWOMAN_DATA_DIR
+// environment variable overrides detection (used by tests and portable
+// launchers). A portable.txt file next to the executable switches to
+// <exe dir>/data, so a portable copy keeps everything together on a USB drive.
+func DataDir() string {
+	if override := strings.TrimSpace(os.Getenv("POSTWOMAN_DATA_DIR")); override != "" {
+		return override
+	}
+	if dir, ok := portableDataDirForExecutable(); ok {
+		return dir
+	}
+	switch runtime.GOOS {
+	case "windows", "darwin":
+		// Windows: %APPDATA%\Postwoman
+		// macOS:   ~/Library/Application Support/Postwoman
+		if dir, err := os.UserConfigDir(); err == nil && dir != "" {
+			dataDir := filepath.Join(dir, "Postwoman")
+			if runtime.GOOS == "windows" {
+				// Preserve source-build data from the pre-1.4 default path.
+				if _, statErr := os.Stat(filepath.Join(dataDir, "postwoman.db")); os.IsNotExist(statErr) {
+					if home, homeErr := os.UserHomeDir(); homeErr == nil {
+						legacy := filepath.Join(home, ".postwoman")
+						if _, legacyErr := os.Stat(filepath.Join(legacy, "postwoman.db")); legacyErr == nil {
+							return legacy
+						}
+					}
+				}
+			}
+			return dataDir
 		}
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".local", "share", "Postwoman", "postwoman.db")
+	}
+	if xdgData := os.Getenv("XDG_DATA_HOME"); xdgData != "" {
+		return filepath.Join(xdgData, "Postwoman")
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".postwoman", "postwoman.db")
+	return filepath.Join(home, ".local", "share", "Postwoman")
+}
+
+func portableDataDirForExecutable() (string, bool) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", false
+	}
+	return portableDataDirFrom(exe)
+}
+
+func portableDataDirFrom(exe string) (string, bool) {
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	dir := filepath.Dir(exe)
+	if _, err := os.Stat(filepath.Join(dir, portableMarker)); err != nil {
+		return "", false
+	}
+	return filepath.Join(dir, "data"), true
+}
+
+// IsPortable reports whether the app is running in portable mode either
+// through the marker file or an explicit data-directory override.
+func IsPortable() bool {
+	if strings.TrimSpace(os.Getenv("POSTWOMAN_DATA_DIR")) != "" {
+		return true
+	}
+	_, ok := portableDataDirForExecutable()
+	return ok
+}
+
+// PortableWebviewDataPath returns the WebView2 user-data directory for a
+// portable build, or "" to let Wails use its normal per-user location.
+func PortableWebviewDataPath() string {
+	if !IsPortable() {
+		return ""
+	}
+	return filepath.Join(DataDir(), "webview2")
+}
+
+// GetDBPath returns the platform data directory path for the database.
+func GetDBPath() string {
+	return filepath.Join(DataDir(), "postwoman.db")
 }
 
 // SanitizeLike escapes LIKE wildcards for search queries.
