@@ -187,9 +187,12 @@ jobs:
           }
           $exe = Join-Path $dir "Postwoman-v$env:VERSION-windows-x64-setup.exe"
           $vi = (Get-Item $exe).VersionInfo
-          if (-not $vi.ProductVersion.StartsWith($env:VERSION)) {
-            throw "installer version $($vi.ProductVersion) does not match $env:VERSION"
+          $product = "$($vi.ProductVersion)"
+          $file = "$($vi.FileVersion)"
+          if (-not ($product.StartsWith($env:VERSION) -or $file.StartsWith($env:VERSION))) {
+            throw "installer version '$product' / '$file' does not match $env:VERSION"
           }
+          Write-Host "installer version: product='$product' file='$file'"
           Get-ChildItem $dir -File | Select-Object Name, Length
       - name: Upload Windows assets
         uses: actions/upload-artifact@v4

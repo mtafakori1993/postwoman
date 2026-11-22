@@ -2,10 +2,14 @@ package discovery
 
 import (
 	"context"
+	"fmt"
+	"runtime/debug"
 	"sort"
 	"time"
 
 	"Postwoman/internal/model"
+
+	"github.com/rs/zerolog/log"
 )
 
 // run executes one discovery session end to end.
@@ -40,6 +44,16 @@ func (m *Manager) run(ctx context.Context, s *session, settings model.AppSetting
 			emit(s.state.Progress)
 		}
 	}
+
+	// A malformed project must never take down the desktop app: convert any
+	// panic in the analysis pipeline into a failed session with a stack trace.
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			stack := string(debug.Stack())
+			log.Error().Interface("panic", recovered).Msg("discovery agent panicked")
+			fail(fmt.Errorf("discovery agent crashed: %v\n%s", recovered, stack))
+		}
+	}()
 
 	progress("scanning", 2, "Scanning project files", "")
 	result, err := scanProject(ctx, s.state.Options, func(percent int, message, current string) {
@@ -87,6 +101,17 @@ func (m *Manager) run(ctx context.Context, s *session, settings model.AppSetting
 		aiWarnings := analyzer.enrichWithAI(ctx, settings, m.ai, s.state.Options, progress)
 		warnings = append(warnings, aiWarnings...)
 		endpoints = analyzer.sortedEndpoints()
+	}
+
+	// Release the full source of files that produced no routes; the review
+	// screen can re-read them from disk on demand. Large projects (for example
+	// WordPress trees) otherwise keep the whole repository in memory.
+	for _, file := range s.files {
+		info := analyzer.fileInfos[file.Rel]
+		if info == nil || !info.HasRoutes {
+			file.Content = ""
+			file.Lines = nil
+		}
 	}
 
 	progress("generating", 88, "Generating Postwoman collection", "")

@@ -18,6 +18,13 @@ Postwoman v1.4.1 is an API development desktop release for Windows and Linux.
 - Restored natural interface typography: the platform system font is used instead of a bold-only Open Sans face, non-default font feature settings were removed, and forced leading overrides were relaxed ([a59464f](https://github.com/mtafakori1993/postwoman/commit/a59464f)).
 - Hardened the Windows release build with reliable MinGW-w64/NSIS discovery, a toolchain verification step, execution-policy bypass, build-log artifacts and error annotations. The workflow now validates the executable/installer versions and portable ZIP contents before publishing.
 - Fixed the Windows build script parse error (`$out:` variable expansion) that made the job fail immediately, and added a build-log artifact for future diagnosis.
+- Fixed the empty Windows executable version metadata: `build/windows/info.json` now embeds a four-part file/product version, so the release build verifies the app and installer versions correctly.
+
+## Discovery agent
+
+- The **API Discovery Agent** is now a full-size workspace: a stage stepper (Setup → Analyze → Review → Import), a searchable and filterable endpoint list, per-endpoint tabs for details, parameters, schemas and the exact source window, and a collection preview before anything is imported.
+- Fixed a crash after discovering projects that yield no detectable endpoints (for example a WordPress tree without recognisable routes). Discovery sessions now always return arrays instead of `null`, the review UI tolerates empty results, the app and dialog are wrapped in error boundaries, and a panic inside the agent is reported as a failed session instead of terminating the application.
+- Large repositories now release the source of files that produced no routes and re-read them on demand, which keeps WordPress-sized checkouts within a comfortable memory budget.
 
 **Full changelog:** https://github.com/mtafakori1993/postwoman/compare/v1.3.3...v1.4.1
 

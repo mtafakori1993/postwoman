@@ -10,6 +10,7 @@ import { CodeExportDialog } from "./components/CodeExportDialog"
 import { ImportCurlDialog } from "./components/ImportCurlDialog"
 import { AIAssistant } from "./components/AIAssistant"
 import { AIDiscoveryDialog } from "./components/AIDiscoveryDialog"
+import { ErrorBoundary } from "./components/ErrorBoundary"
 import { RunnerDialog } from "./components/RunnerDialog"
 import { useWorkspaceStore, newRequestDraft } from "./stores/workspace"
 import * as api from "./lib/api"
@@ -519,7 +520,13 @@ function App() {
         }}
       />
       <AIAssistant open={aiOpen} onOpenChange={setAiOpen} request={activeRequest || null} response={activeResponse || null} />
-      <AIDiscoveryDialog open={discoveryOpen} onOpenChange={setDiscoveryOpen} />
+      <ErrorBoundary
+        title="The API Discovery Agent hit an error"
+        description="The discovery results could not be rendered. Close the dialog and try again with a smaller project or fewer endpoints."
+        onReset={() => setDiscoveryOpen(false)}
+      >
+        <AIDiscoveryDialog open={discoveryOpen} onOpenChange={setDiscoveryOpen} />
+      </ErrorBoundary>
 
       <Dialog open={pendingClose !== null} onOpenChange={(open) => !open && setPendingClose(null)}>
         <DialogContent className="max-w-md">

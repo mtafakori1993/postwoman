@@ -410,3 +410,47 @@ func TestValidateCollectionRejectsGarbage(t *testing.T) {
 		t.Fatalf("expected a valid collection to pass: %v", err)
 	}
 }
+func TestSourceFileFallsBackToDiskAfterTrim(t *testing.T) {
+	manager, session, _ := runDiscovery(t, newFixture(t))
+	// package.json is scanned but produces no routes, so its content is released
+	// after analysis and must be re-read from disk on demand.
+	source, err := manager.SourceFile(session.ID, "package.json", 1, 4)
+	if err != nil {
+		t.Fatalf("source fallback: %v", err)
+	}
+	if !strings.Contains(source.Content, "fixture-api") {
+		t.Fatalf("unexpected source content: %q", source.Content)
+	}
+	if source.TotalLines < 2 {
+		t.Fatalf("expected total lines, got %d", source.TotalLines)
+	}
+}
+
+func TestReadProjectFileRejectsTraversal(t *testing.T) {
+	root := t.TempDir()
+	if _, err := readProjectFile(root, "../outside.txt"); err == nil {
+		t.Fatal("expected traversal outside the project root to be rejected")
+	}
+}
+func TestSessionArraysAreNeverNil(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "readme.md", "# Documentation only\n\nNo routes here.\n")
+	manager := NewManager(nil)
+	id, err := manager.Start(model.DiscoveryOptions{
+		Directory: root, CollectionName: "Docs", UseAI: false, MaxFiles: 50, MaxFileSizeKB: 64,
+	}, model.AppSettings{}, nil)
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	session := waitForSession(t, manager, id)
+	if session.Status != "completed" {
+		t.Fatalf("expected completed, got %q (%s)", session.Status, session.Error)
+	}
+	if session.Endpoints == nil || session.Files == nil || session.Folders == nil ||
+		session.Warnings == nil || session.Languages == nil || session.Frameworks == nil {
+		t.Fatalf("session arrays must be non-nil for the UI: %+v", session)
+	}
+	if len(session.Endpoints) != 0 {
+		t.Fatalf("expected no endpoints, got %d", len(session.Endpoints))
+	}
+}

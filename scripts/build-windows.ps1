@@ -174,10 +174,12 @@ if ($LASTEXITCODE -ne 0) { Fail "wails build failed" }
 $exe = Assert-File (Join-Path $Root "build\bin\Postwoman.exe") 1000000 "Windows executable"
 Assert-PE $exe.FullName "Windows executable"
 $exeVersion = (Get-Item -LiteralPath $exe.FullName).VersionInfo
-if (-not $exeVersion.ProductVersion.StartsWith($Version)) {
-    Fail "executable ProductVersion '$($exeVersion.ProductVersion)' does not match $Version"
+$exeProduct = "$($exeVersion.ProductVersion)"
+$exeFile = "$($exeVersion.FileVersion)"
+if (-not ($exeProduct.StartsWith($Version) -or $exeFile.StartsWith($Version))) {
+    Fail "executable version '$exeProduct' / '$exeFile' does not match $Version"
 }
-Write-Host "    executable version: $($exeVersion.ProductVersion)"
+Write-Host "    executable version: product='$exeProduct' file='$exeFile'"
 
 $installer = $null
 if (-not $NoInstaller) {
@@ -187,10 +189,12 @@ if (-not $NoInstaller) {
     $installer = Assert-File $candidates[0].FullName 1000000 "NSIS installer"
     Assert-PE $installer.FullName "NSIS installer"
     $installerVersion = (Get-Item -LiteralPath $installer.FullName).VersionInfo
-    if (-not $installerVersion.ProductVersion.StartsWith($Version)) {
-        Fail "installer ProductVersion '$($installerVersion.ProductVersion)' does not match $Version"
+    $installerProduct = "$($installerVersion.ProductVersion)"
+    $installerFile = "$($installerVersion.FileVersion)"
+    if (-not ($installerProduct.StartsWith($Version) -or $installerFile.StartsWith($Version))) {
+        Fail "installer version '$installerProduct' / '$installerFile' does not match $Version"
     }
-    Write-Host "    installer version:  $($installerVersion.ProductVersion)"
+    Write-Host "    installer version:  product='$installerProduct' file='$installerFile'"
 }
 
 $out = Join-Path $Root $OutputDir

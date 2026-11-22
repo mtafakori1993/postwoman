@@ -3,6 +3,7 @@ package discovery
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -82,6 +83,26 @@ func (m *Manager) Get(id string) (*model.DiscoverySession, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	state := s.state
+	// Go marshals nil slices as JSON null; the UI expects arrays even when a
+	// project yields no endpoints/files/warnings. Normalise before returning.
+	if state.Endpoints == nil {
+		state.Endpoints = []model.DiscoveredEndpoint{}
+	}
+	if state.Files == nil {
+		state.Files = []model.DiscoveryFileInfo{}
+	}
+	if state.Folders == nil {
+		state.Folders = []string{}
+	}
+	if state.Warnings == nil {
+		state.Warnings = []string{}
+	}
+	if state.Languages == nil {
+		state.Languages = []string{}
+	}
+	if state.Frameworks == nil {
+		state.Frameworks = []string{}
+	}
 	return &state, nil
 }
 
@@ -132,21 +153,56 @@ func (m *Manager) SourceFile(id, relPath string, startLine, endLine int) (*model
 	if file == nil {
 		return nil, fmt.Errorf("file %q was not part of this analysis", relPath)
 	}
-	total := len(file.Lines)
+	language := file.Language
+	lines := file.Lines
+	if len(lines) == 0 {
+		// Content for non-route files is released after analysis; re-read it on
+		// demand instead of keeping the whole repository in memory.
+		content, err := readProjectFile(s.state.Root, relPath)
+		if err != nil {
+			return nil, err
+		}
+		lines = strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
+	}
+	if len(lines) == 0 {
+		lines = []string{""}
+	}
+	total := len(lines)
 	if startLine < 1 {
 		startLine = 1
+	}
+	if startLine > total {
+		startLine = total
 	}
 	if endLine <= 0 || endLine > total {
 		endLine = total
 	}
+	if endLine < startLine {
+		endLine = startLine
+	}
 	if endLine-startLine > 400 {
 		endLine = startLine + 400
 	}
-	content := strings.Join(file.Lines[startLine-1:endLine], "\n")
+	content := strings.Join(lines[startLine-1:endLine], "\n")
 	return &model.DiscoverySourceFile{
-		Path: relPath, Language: file.Language, StartLine: startLine, EndLine: endLine,
+		Path: relPath, Language: language, StartLine: startLine, EndLine: endLine,
 		TotalLines: total, Content: content, Truncated: endLine < total,
 	}, nil
+}
+
+// readProjectFile reads a file inside the project root and rejects paths that
+// escape it, so the review screen can never read arbitrary files.
+func readProjectFile(root, relPath string) (string, error) {
+	cleanRoot := filepath.Clean(root)
+	target := filepath.Clean(filepath.Join(cleanRoot, filepath.FromSlash(relPath)))
+	if target != cleanRoot && !strings.HasPrefix(target, cleanRoot+string(os.PathSeparator)) {
+		return "", fmt.Errorf("file %q is outside the project directory", relPath)
+	}
+	data, err := os.ReadFile(target)
+	if err != nil {
+		return "", fmt.Errorf("file %q was not part of this analysis", relPath)
+	}
+	return string(data), nil
 }
 
 // Generate renders reviewed endpoints as an import-ready Postwoman collection.
