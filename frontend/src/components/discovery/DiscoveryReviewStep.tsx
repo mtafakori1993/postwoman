@@ -8,8 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   AlertTriangle,
-  ArrowLeft,
-  CheckCircle2,
+  ArrowLeftRight,
   Copy,
   Eye,
   FileCode2,
@@ -111,6 +110,12 @@ export function DiscoveryReviewStep({
     if (detailTab === "source" && activeEndpoint && !source) void openSource(activeEndpoint)
   }, [detailTab, activeEndpoint, source, openSource])
 
+  const invertFiltered = () => {
+    for (const endpoint of filtered) {
+      updateEdit(endpoint.id, { selected: !(edits[endpoint.id]?.selected ?? true) })
+    }
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 space-y-3 border-b px-6 py-3">
@@ -145,6 +150,7 @@ export function DiscoveryReviewStep({
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search method, path, name or handler…"
+                aria-label="Search endpoints"
                 className="h-8 pl-7 text-xs"
               />
             </div>
@@ -152,6 +158,7 @@ export function DiscoveryReviewStep({
               <select
                 value={methodFilter}
                 onChange={(event) => setMethodFilter(event.target.value)}
+                aria-label="Filter by HTTP method"
                 className="h-8 rounded-md border bg-background px-2 text-xs"
               >
                 <option value="ALL">All methods</option>
@@ -164,6 +171,7 @@ export function DiscoveryReviewStep({
               <select
                 value={confidenceFilter}
                 onChange={(event) => setConfidenceFilter(event.target.value as ConfidenceFilter)}
+                aria-label="Filter by confidence"
                 className="h-8 rounded-md border bg-background px-2 text-xs"
               >
                 <option value="all">All confidence</option>
@@ -173,6 +181,7 @@ export function DiscoveryReviewStep({
               <select
                 value={folderFilter}
                 onChange={(event) => setFolderFilter(event.target.value)}
+                aria-label="Filter by folder"
                 className="h-8 max-w-[180px] rounded-md border bg-background px-2 text-xs"
               >
                 <option value="all">All folders</option>
@@ -198,6 +207,9 @@ export function DiscoveryReviewStep({
               >
                 Select filtered
               </Button>
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={invertFiltered}>
+                <ArrowLeftRight className="h-3.5 w-3.5" /> Invert filtered
+              </Button>
               <span className="ml-auto pw-text-2xs text-muted-foreground">
                 {filtered.length} shown · {selectedCount} selected
               </span>
@@ -221,6 +233,7 @@ export function DiscoveryReviewStep({
                     key={endpoint.id}
                     role="button"
                     tabIndex={0}
+                    aria-current={activeID === endpoint.id ? "true" : undefined}
                     onClick={() => setActiveID(endpoint.id)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {

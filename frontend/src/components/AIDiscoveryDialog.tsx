@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { AlertTriangle, Check, Compass, Loader2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { AlertTriangle, Check, Compass, Loader2, RotateCcw } from "lucide-react"
 import * as api from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { useWorkspaceStore } from "@/stores/workspace"
@@ -296,7 +297,36 @@ export function AIDiscoveryDialog({ open, onOpenChange }: AIDiscoveryDialogProps
               refresh={() => void refreshSession(sessionID)}
             />
           )}
+          {stage === "review" && session?.status === "failed" && (
+            <div className="flex h-full items-center justify-center overflow-y-auto p-6">
+              <div className="w-full max-w-xl space-y-3 rounded-lg border border-destructive/40 bg-destructive/5 p-6 text-center">
+                <AlertTriangle className="mx-auto h-8 w-8 text-destructive" />
+                <p className="text-sm font-semibold">The discovery agent could not finish</p>
+                <p className="break-words pw-text-2xs text-muted-foreground">
+                  {session.error || error || "The analysis stopped unexpectedly."}
+                </p>
+                {(session.warnings?.length ?? 0) > 0 && (
+                  <ul className="mx-auto max-w-md list-inside list-disc space-y-0.5 text-left pw-text-2xs text-muted-foreground">
+                    {(session.warnings ?? []).slice(0, 4).map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                )}
+                <div className="flex justify-center gap-2 pt-1">
+                  <Button variant="outline" onClick={() => setStage("setup")}>
+                    Back to setup
+                  </Button>
+                  <Button className="gap-1.5" onClick={start} disabled={busy}>
+                    {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                    Try again
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {stage === "review" &&
+            session?.status !== "failed" &&
             (session ? (
               <DiscoveryReviewStep
                 session={session}

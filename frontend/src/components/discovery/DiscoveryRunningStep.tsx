@@ -175,7 +175,7 @@ export function DiscoveryRunningStep({ session, log, cancel, refresh }: Discover
           <Wand2 className="h-3.5 w-3.5" /> You can cancel at any time; partial results are discarded.
         </span>
         <div className="flex gap-2">
-          <Button variant="ghost" className="gap-1.5" onClick={refresh}>
+          <Button variant="ghost" className="gap-1.5" onClick={refresh} disabled={!session}>
             <RefreshCw className="h-4 w-4" /> Refresh
           </Button>
           <Button variant="outline" className="gap-1.5" onClick={cancel}>
