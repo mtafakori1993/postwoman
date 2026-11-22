@@ -4,6 +4,15 @@ All notable changes to Postwoman are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and
 [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - 2026-11-22
+
+### Features
+
+- **release:** Add Windows installer and portable release pipeline ([a63e1b5](https://github.com/mtafakori1993/postwoman/commit/a63e1b5))
+- Add AI providers and API discovery agent ([a59464f](https://github.com/mtafakori1993/postwoman/commit/a59464f))
+
+[1.4.0]: https://github.com/mtafakori1993/postwoman/releases/tag/v1.4.0
+
 ## [1.3.3] - 2026-11-21
 
 ### Added
