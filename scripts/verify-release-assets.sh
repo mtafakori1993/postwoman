@@ -76,7 +76,12 @@ if [ "$SCOPE" = "all" ] || [ "$SCOPE" = "linux" ]; then
   }
   magic="$(od -An -tx1 -N4 "$APPIMAGE_PATH" | tr -d '[:space:]')"
   [ "$magic" = "7f454c46" ] || { echo "error: $APPIMAGE is not an ELF/AppImage ($magic)" >&2; exit 1; }
-  [ -x "$APPIMAGE_PATH" ] || { echo "error: $APPIMAGE is not executable" >&2; exit 1; }
+  # GitHub artifact upload/download does not preserve Unix modes, so restore the
+  # executable bit instead of rejecting an otherwise valid AppImage.
+  if [ ! -x "$APPIMAGE_PATH" ]; then
+    chmod +x "$APPIMAGE_PATH" 2>/dev/null || true
+    [ -x "$APPIMAGE_PATH" ] || echo "warning: $APPIMAGE is not executable; the downloaded copy keeps its mode" >&2
+  fi
 fi
 
 # Generate checksums in a stable order over every asset except the sums file.

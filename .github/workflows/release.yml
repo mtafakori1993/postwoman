@@ -277,7 +277,21 @@ jobs:
             --out release-notes.md --no-changelog
           sed -n '1,40p' release-notes.md
       - name: Validate all assets and write checksums
-        run: ./scripts/verify-release-assets.sh dist "${{ needs.validate.outputs.version }}" all
+        run: |
+          chmod +x dist/*.AppImage 2>/dev/null || true
+          ./scripts/verify-release-assets.sh dist "${{ needs.validate.outputs.version }}" all
+      - name: Report publish diagnostics
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          ls -la dist || true
+          listing="$(ls dist 2>/dev/null | tr '\n' ' ' | cut -c1-110)"
+          gh api "repos/${{ github.repository }}/statuses/${{ github.sha }}" \
+            -f state=failure -f context="release-publish" \
+            -f description="assets: $listing" >/dev/null 2>&1 || true
       - name: Create or update GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
