@@ -4,6 +4,22 @@ All notable changes to Postwoman are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and
 [Semantic Versioning](https://semver.org/).
 
+## [1.4.1] - 2026-11-22
+
+> Supersedes v1.4.0, whose Windows build failed before any release assets were published.
+
+### Features
+
+- **release:** Add Windows installer and portable release pipeline ([a63e1b5](https://github.com/mtafakori1993/postwoman/commit/a63e1b5))
+- Add AI providers and API discovery agent ([a59464f](https://github.com/mtafakori1993/postwoman/commit/a59464f))
+
+### Improvements
+
+- Restore natural interface typography using the platform system font and default rendering ([a59464f](https://github.com/mtafakori1993/postwoman/commit/a59464f))
+- Harden the Windows release build with reliable MinGW-w64/NSIS discovery, toolchain verification and artifact validation.
+
+[1.4.1]: https://github.com/mtafakori1993/postwoman/releases/tag/v1.4.1
+
 ## [1.4.0] - 2026-11-22
 
 ### Features

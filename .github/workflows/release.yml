@@ -94,7 +94,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $candidates = @("C:\mingw64\bin", "C:\msys64\mingw64\bin")
+          $candidates = @("C:\mingw64\bin", "C:\msys64\mingw64\bin", "C:\ProgramData\chocolatey\bin")
           $mingw = $candidates | Where-Object { Test-Path (Join-Path $_ "gcc.exe") } | Select-Object -First 1
           if (-not $mingw) {
             choco install mingw --no-progress -y
@@ -104,20 +104,59 @@ jobs:
             throw "gcc.exe was not found after installing MinGW"
           }
           Add-Content $env:GITHUB_PATH $mingw
+          Add-Content $env:GITHUB_ENV "MINGW_BIN=$mingw"
           & (Join-Path $mingw "gcc.exe") --version | Select-Object -First 1
       - name: Install NSIS
         shell: pwsh
         run: |
           choco install nsis --no-progress -y
-          $nsis = Join-Path ${env:ProgramFiles(x86)} 'NSIS'
-          if (-not (Test-Path (Join-Path $nsis 'makensis.exe'))) {
-            throw "NSIS was not installed correctly"
-          }
+          $candidates = @(
+            (Join-Path ${env:ProgramFiles(x86)} "NSIS"),
+            (Join-Path $env:ProgramFiles "NSIS"),
+            "C:\ProgramData\chocolatey\lib\nsis\tools",
+            "C:\ProgramData\chocolatey\bin"
+          )
+          $nsis = $candidates | Where-Object { $_ -and (Test-Path (Join-Path $_ "makensis.exe")) } | Select-Object -First 1
+          if (-not $nsis) { throw "NSIS was not installed correctly" }
           Add-Content $env:GITHUB_PATH $nsis
-          & (Join-Path $nsis 'makensis.exe') -VERSION
+          Add-Content $env:GITHUB_ENV "NSIS_DIR=$nsis"
+          & (Join-Path $nsis "makensis.exe") -VERSION
+      - name: Verify Windows toolchain
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          foreach ($tool in @("go", "node", "npm", "gcc", "makensis", "wails")) {
+            $command = Get-Command $tool -ErrorAction SilentlyContinue
+            if (-not $command) { throw "$tool was not found in PATH" }
+            Write-Host "$tool -> $($command.Source)"
+          }
+          & go version
+          & node --version
+          & npm --version
+          & gcc --version | Select-Object -First 1
+          & makensis -VERSION
+          & wails version
       - name: Build portable ZIP and installer
         shell: pwsh
-        run: ./scripts/build-windows.ps1 -Version "${{ needs.validate.outputs.version }}"
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          $log = "build-windows.log"
+          & pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-windows.ps1 -Version $env:VERSION *>&1 |
+            Tee-Object -FilePath $log
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            Get-Content $log -Tail 100 | ForEach-Object { Write-Host "::error::$_" }
+            exit $code
+          }
+      - name: Upload Windows build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build-log
+          path: build-windows.log
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Validate Windows outputs
         shell: pwsh
         env:

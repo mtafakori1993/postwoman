@@ -239,7 +239,7 @@ if (!options.noChangelog) {
   const start = changelog.indexOf(heading)
   if (start >= 0) {
     const next = changelog.indexOf("\n## [", start + heading.length)
-    changelog = changelog.slice(0, start) + entry + (next >= 0 ? changelog.slice(next + 1) : "\n")
+    changelog = changelog.slice(0, start) + entry.replace(/\n*$/, "\n\n") + (next >= 0 ? changelog.slice(next + 1) : "\n")
   } else {
     const first = changelog.indexOf("\n## [")
     if (first >= 0) {
@@ -248,6 +248,7 @@ if (!options.noChangelog) {
       changelog = `${changelog.replace(/\s*$/, "")}\n\n${entry}\n`
     }
   }
+  changelog = changelog.replace(/\n{3,}/g, "\n\n").replace(/\n*$/, "\n")
   fs.writeFileSync(changelogPath, changelog)
   console.log(`updated ${path.relative(root, changelogPath)}`)
 }

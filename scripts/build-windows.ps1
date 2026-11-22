@@ -48,6 +48,27 @@ function Require-Command([string]$Name, [string]$Hint) {
     }
 }
 
+function Find-Executable([string]$Name, [string[]]$Candidates) {
+    $command = Get-Command $Name -ErrorAction SilentlyContinue
+    if ($command -and $command.Source) { return $command.Source }
+    foreach ($directory in $Candidates) {
+        if (-not $directory) { continue }
+        foreach ($file in @($Name, "$Name.exe")) {
+            $candidate = Join-Path $directory $file
+            if (Test-Path -LiteralPath $candidate) { return $candidate }
+        }
+    }
+    return $null
+}
+
+function Add-ToolDirectory([string]$ExecutablePath) {
+    if (-not $ExecutablePath) { return }
+    $directory = Split-Path -Parent $ExecutablePath
+    if ($directory -and (($env:Path -split ';') -notcontains $directory)) {
+        $env:Path = "$directory;$env:Path"
+    }
+}
+
 function Assert-File([string]$Path, [long]$MinBytes, [string]$Label) {
     if (-not (Test-Path -LiteralPath $Path)) { Fail "$Label is missing: $Path" }
     $item = Get-Item -LiteralPath $Path
@@ -74,37 +95,45 @@ if ($Version -ne $repoVersion) {
 Require-Command node "Install Node.js 20+."
 Require-Command npm "Install Node.js 20+."
 Require-Command go "Install Go 1.27+ (https://go.dev/dl/)."
-if (-not (Get-Command gcc -ErrorAction SilentlyContinue)) {
-    foreach ($candidate in @("C:\mingw64\bin", "C:\msys64\mingw64\bin")) {
-        if (Test-Path (Join-Path $candidate "gcc.exe")) {
-            $env:Path = "$candidate;$env:Path"
-            break
-        }
-    }
+
+$goBin = Join-Path (go env GOPATH) "bin"
+$userGoBin = Join-Path $env:USERPROFILE "go\bin"
+$wailsExe = Find-Executable "wails" @($goBin, $userGoBin)
+if (-not $wailsExe) {
+    Fail "wails.exe not found. Install it with: go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.1"
 }
-Require-Command gcc "Install MinGW-w64; SQLite requires CGO."
+Add-ToolDirectory $wailsExe
+Write-Host "Using Wails: $wailsExe"
+
+$gccExe = Find-Executable "gcc" @(
+    $env:MINGW_BIN,
+    "C:\msys64\mingw64\bin",
+    "C:\mingw64\bin",
+    "C:\ProgramData\chocolatey\bin"
+)
+if (-not $gccExe) {
+    Fail "gcc.exe not found. Install MinGW-w64 (for example 'choco install mingw'); SQLite requires CGO."
+}
+Add-ToolDirectory $gccExe
 $env:CGO_ENABLED = "1"
-if (-not (Get-Command wails -ErrorAction SilentlyContinue)) {
-    $goBin = Join-Path (go env GOPATH) "bin"
-    if (Test-Path (Join-Path $goBin "wails.exe")) {
-        $env:Path = "$goBin;$env:Path"
-    }
-}
-Require-Command wails "Install the Wails CLI: go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.1"
+$env:CC = $gccExe
+Write-Host "Using C compiler: $gccExe"
+
 if (-not $NoInstaller) {
-    if (-not (Get-Command makensis.exe -ErrorAction SilentlyContinue)) {
-        $programFilesX86 = ${env:ProgramFiles(x86)}
-        if (-not $programFilesX86) { $programFilesX86 = $env:ProgramFiles }
-        $nsisCandidates = @(
-            (Join-Path $programFilesX86 "NSIS"),
-            (Join-Path $env:ProgramFiles "NSIS")
-        ) | Where-Object { $_ -and (Test-Path (Join-Path $_ "makensis.exe")) }
-        if ($nsisCandidates.Count -gt 0) {
-            $env:Path = "$($nsisCandidates[0]);$env:Path"
-        } else {
-            Fail "makensis.exe not found. Install NSIS 3 from https://nsis.sourceforge.io/ or 'choco install nsis'."
-        }
+    $programFilesX86 = ${env:ProgramFiles(x86)}
+    if (-not $programFilesX86) { $programFilesX86 = $env:ProgramFiles }
+    $makensisExe = Find-Executable "makensis" @(
+        $env:NSIS_DIR,
+        (Join-Path $programFilesX86 "NSIS"),
+        (Join-Path $env:ProgramFiles "NSIS"),
+        "C:\ProgramData\chocolatey\lib\nsis\tools",
+        "C:\ProgramData\chocolatey\bin"
+    )
+    if (-not $makensisExe) {
+        Fail "makensis.exe not found. Install NSIS 3 from https://nsis.sourceforge.io/ or 'choco install nsis'."
     }
+    Add-ToolDirectory $makensisExe
+    Write-Host "Using NSIS: $makensisExe"
 }
 
 & node scripts/update-version.mjs --check $Version
@@ -139,7 +168,7 @@ $wailsArgs = @(
 if (-not $NoInstaller) {
     $wailsArgs += @("-nsis", "-installscope", "user")
 }
-& wails @wailsArgs
+& $wailsExe @wailsArgs
 if ($LASTEXITCODE -ne 0) { Fail "wails build failed" }
 
 $exe = Assert-File (Join-Path $Root "build\bin\Postwoman.exe") 1000000 "Windows executable"
@@ -191,9 +220,9 @@ try {
         $entry = $archive.CreateEntry("$portableName/$relative", [System.IO.Compression.CompressionLevel]::Optimal)
         # Fixed timestamp keeps the archive reproducible across runners.
         $entry.LastWriteTime = [DateTimeOffset]::new(2020, 1, 1, 0, 0, 0, [TimeSpan]::Zero)
-        $input = [System.IO.File]::OpenRead($file.FullName)
-        $output = $entry.Open()
-        try { $input.CopyTo($output) } finally { $output.Dispose(); $input.Dispose() }
+        $sourceStream = [System.IO.File]::OpenRead($file.FullName)
+        $destStream = $entry.Open()
+        try { $sourceStream.CopyTo($destStream) } finally { $destStream.Dispose(); $sourceStream.Dispose() }
     }
 } finally {
     $archive.Dispose()
