@@ -271,6 +271,7 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+          pattern: "*-dist"
       - name: Generate categorized release notes
         run: |
           node scripts/generate-release-notes.mjs "${{ needs.validate.outputs.version }}" \
@@ -306,6 +307,19 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG exists; updating assets and notes"
             gh release upload "$TAG" "${ASSETS[@]}" --clobber
+            # Drop assets that are not part of this release (for example a stray
+            # build log uploaded by an earlier run).
+            while IFS= read -r existing; do
+              [ -n "$existing" ] || continue
+              keep=0
+              for asset in "${ASSETS[@]}"; do
+                if [ "${asset##*/}" = "$existing" ]; then keep=1; break; fi
+              done
+              if [ "$keep" = 0 ]; then
+                echo "Removing unexpected release asset: $existing"
+                gh release delete-asset "$TAG" "$existing" -y >/dev/null 2>&1 || true
+              fi
+            done < <(gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null || true)
             gh release edit "$TAG" \
               --title "Postwoman v$VERSION" \
               --notes-file release-notes.md \

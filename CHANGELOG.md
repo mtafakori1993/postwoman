@@ -27,6 +27,7 @@ All notable changes to Postwoman are documented here. The format follows
 - Wrap the application and the discovery dialog in error boundaries so an unexpected payload can no longer blank the window.
 - Recover from panics inside the discovery agent and report them as a failed session instead of terminating the app.
 - Release cached source for non-route files after analysis and re-read it on demand, reducing peak memory on large repositories such as WordPress checkouts.
+- Publish only the validated release artifacts (build logs are no longer uploaded as assets) and remove unexpected assets from an existing release.
 
 [1.4.1]: https://github.com/mtafakori1993/postwoman/releases/tag/v1.4.1
 
