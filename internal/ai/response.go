@@ -78,7 +78,11 @@ type openAIChatResponse struct {
 		Message      openAIMessage `json:"message"`
 		Delta        openAIMessage `json:"delta"`
 		Text         flexString    `json:"text"`
-		FinishReason string        `json:"finishReason"`
+		FinishReason string        `json:"finish_reason"`
+		// Some OpenAI-compatible gateways use camelCase for this field.
+		FinishReasonCamel string `json:"finishReason"`
+		// OpenAI-compatible proxies occasionally mirror Anthropic's name.
+		StopReason string `json:"stop_reason"`
 	} `json:"choices"`
 	// Some non-OpenAI endpoints (Ollama, Copilot-style gateways) return a single
 	// top-level message instead of a choices array.
@@ -101,6 +105,17 @@ func (r openAIChatResponse) content() string {
 		}
 	}
 	return firstNonEmpty(r.Message.text(), string(r.Content), string(r.Text))
+}
+
+// finishReason returns the first normalised completion reason advertised by any
+// choice.
+func (r openAIChatResponse) finishReason() string {
+	for _, choice := range r.Choices {
+		if reason := firstNonEmpty(choice.FinishReason, choice.FinishReasonCamel, choice.StopReason); reason != "" {
+			return normalizeFinishReason(reason)
+		}
+	}
+	return ""
 }
 
 // errorMessage extracts a human-readable message from the many shapes the
@@ -171,4 +186,22 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// normalizeFinishReason collapses provider-specific stop reasons into a small
+// common vocabulary. "length" is the one callers act on: it means the model was
+// cut off at the completion token limit and a JSON payload may be incomplete.
+func normalizeFinishReason(reason string) string {
+	switch strings.ToLower(strings.TrimSpace(reason)) {
+	case "":
+		return ""
+	case "length", "max_tokens", "max_output_tokens", "max_output", "max_output_token", "token_limit":
+		return "length"
+	case "stop", "end_turn", "stop_sequence", "eos", "complete", "completed":
+		return "stop"
+	case "content_filter", "content-filter", "safety", "blocked", "recitation":
+		return "content_filter"
+	default:
+		return strings.ToLower(strings.TrimSpace(reason))
+	}
 }

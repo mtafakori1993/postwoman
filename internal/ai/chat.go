@@ -79,7 +79,7 @@ func (c *Client) chatOpenAI(ctx context.Context, req ChatRequest, model string, 
 	if content == "" {
 		return nil, fmt.Errorf("%s returned no content: %s", c.cfg.Name, responseSnippet(raw, c.cfg.APIKey))
 	}
-	return &ChatResponse{Content: content, Model: parsed.Model, Usage: parseUsage(parsed.Usage)}, nil
+	return &ChatResponse{Content: content, Model: parsed.Model, Usage: parseUsage(parsed.Usage), FinishReason: parsed.finishReason()}, nil
 }
 
 func (c *Client) chatAnthropic(ctx context.Context, req ChatRequest, model string, maxTokens int, temperature float64) (*ChatResponse, error) {
@@ -114,8 +114,9 @@ func (c *Client) chatAnthropic(ctx context.Context, req ChatRequest, model strin
 			Type string `json:"type"`
 			Text string `json:"text"`
 		} `json:"content"`
-		Usage json.RawMessage `json:"usage"`
-		Error json.RawMessage `json:"error"`
+		StopReason string          `json:"stop_reason"`
+		Usage      json.RawMessage `json:"usage"`
+		Error      json.RawMessage `json:"error"`
 	}
 	if err := json.Unmarshal(raw, &parsed); err != nil {
 		return nil, fmt.Errorf("Anthropic returned an unreadable response: %s", responseSnippet(raw, c.cfg.APIKey))
@@ -132,5 +133,5 @@ func (c *Client) chatAnthropic(ctx context.Context, req ChatRequest, model strin
 	if strings.TrimSpace(text.String()) == "" {
 		return nil, fmt.Errorf("Anthropic returned no content: %s", responseSnippet(raw, c.cfg.APIKey))
 	}
-	return &ChatResponse{Content: text.String(), Model: parsed.Model, Usage: parseUsage(parsed.Usage)}, nil
+	return &ChatResponse{Content: text.String(), Model: parsed.Model, Usage: parseUsage(parsed.Usage), FinishReason: normalizeFinishReason(parsed.StopReason)}, nil
 }

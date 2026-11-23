@@ -36,6 +36,16 @@ type ChatResponse struct {
 	Content string         `json:"content"`
 	Model   string         `json:"model,omitempty"`
 	Usage   map[string]int `json:"usage,omitempty"`
+	// FinishReason is normalised to "stop", "length", "content_filter" or the
+	// provider's own value. "length" means the reply may be incomplete, which
+	// callers that expect JSON must treat as a retryable truncation.
+	FinishReason string `json:"finishReason,omitempty"`
+}
+
+// Truncated reports whether the provider stopped because it hit the completion
+// token limit. A truncated reply may contain only part of the requested JSON.
+func (r *ChatResponse) Truncated() bool {
+	return r != nil && (r.FinishReason == "length" || r.FinishReason == "max_tokens")
 }
 
 // Client sends chat requests to one configured provider. It is safe for
@@ -141,46 +151,163 @@ func (c *Client) doJSON(ctx context.Context, method, target string, headers map[
 	return raw, resp.StatusCode, nil
 }
 
-// ExtractJSON pulls the first balanced JSON object/array out of a model reply,
-// tolerating markdown fences and surrounding prose.
+// ExtractJSON pulls the first complete JSON object/array out of a model reply.
+// Real providers rarely return pure JSON: some wrap the payload in markdown
+// fences, prepend a sentence of prose, or (for reasoning models) emit a long
+// explanation first. All of that is tolerated here. When a reply is cut off at
+// the token limit we salvage the last complete portion instead of discarding the
+// whole batch.
 func ExtractJSON(text string) (string, error) {
-	trimmed := strings.TrimSpace(text)
+	trimmed := strings.TrimSpace(strings.TrimPrefix(text, "\ufeff"))
 	if trimmed == "" {
 		return "", fmt.Errorf("the model returned an empty response")
 	}
-	// Preferred: a fenced ```json block.
-	if idx := strings.Index(trimmed, "```"); idx >= 0 {
-		rest := trimmed[idx+3:]
-		if nl := strings.IndexByte(rest, '\n'); nl >= 0 {
-			rest = rest[nl+1:]
-		}
-		if end := strings.Index(rest, "```"); end >= 0 {
-			candidate := strings.TrimSpace(rest[:end])
-			if json.Valid([]byte(candidate)) {
-				return candidate, nil
-			}
-			trimmed = candidate
+	if candidate, ok := normalizeJSONCandidate(trimmed); ok {
+		return candidate, nil
+	}
+
+	// Fenced ```json blocks. Scan every fence because a model may include a
+	// short example before the real answer.
+	for _, block := range fencedBlocks(trimmed) {
+		if candidate, ok := normalizeJSONCandidate(block); ok {
+			return candidate, nil
 		}
 	}
-	start := -1
-	for i, r := range trimmed {
-		if r == '{' || r == '[' {
-			start = i
+
+	// Scan for a balanced value. If the first opening bracket belongs to a
+	// truncated payload, repair it before considering nested objects (otherwise
+	// a nested endpoint object would be returned instead of the envelope).
+	for start := 0; start < len(trimmed); start++ {
+		if trimmed[start] != '{' && trimmed[start] != '[' {
+			continue
+		}
+		candidate, complete, matched := balancedValue(trimmed[start:])
+		if !matched {
+			continue
+		}
+		if complete {
+			if normalized, ok := normalizeJSONCandidate(candidate); ok {
+				return normalized, nil
+			}
+			continue
+		}
+		if repaired, ok := repairTruncatedJSON(candidate); ok {
+			return repaired, nil
+		}
+	}
+	return "", fmt.Errorf("no complete JSON object or array found in the model response")
+}
+
+// fencedBlocks returns the contents of every ``` fenced block in text,
+// regardless of the optional language tag on the opening line.
+func fencedBlocks(text string) []string {
+	blocks := []string{}
+	for {
+		start := strings.Index(text, "```")
+		if start < 0 {
 			break
 		}
+		rest := text[start+3:]
+		if nl := strings.IndexByte(rest, '\n'); nl >= 0 {
+			rest = rest[nl+1:]
+		} else if brace := strings.IndexAny(rest, "{["); brace >= 0 {
+			// Support one-line fences such as ```json {"endpoints":[]} ```.
+			rest = rest[brace:]
+		} else {
+			rest = ""
+		}
+		end := strings.Index(rest, "```")
+		if end < 0 {
+			blocks = append(blocks, strings.TrimSpace(rest))
+			break
+		}
+		blocks = append(blocks, strings.TrimSpace(rest[:end]))
+		text = rest[end+3:]
 	}
-	if start < 0 {
-		return "", fmt.Errorf("no JSON found in the model response")
+	return blocks
+}
+
+// normalizeJSONCandidate accepts a candidate that is already valid JSON, has
+// harmless trailing commas, or was truncated and can be closed safely.
+func normalizeJSONCandidate(text string) (string, bool) {
+	candidate := strings.TrimSpace(text)
+	if candidate == "" {
+		return "", false
 	}
-	open := trimmed[start]
-	closeCh := byte('}')
-	if open == '[' {
-		closeCh = ']'
+	if json.Valid([]byte(candidate)) {
+		return candidate, true
 	}
-	depth := 0
+	stripped := stripTrailingCommas(candidate)
+	if stripped != candidate && json.Valid([]byte(stripped)) {
+		return stripped, true
+	}
+	if repaired, ok := repairTruncatedJSON(candidate); ok {
+		return repaired, true
+	}
+	return "", false
+}
+
+// balancedValue returns the prefix of s that starts with the given opening
+// bracket and ends where its matching bracket closes. complete reports whether
+// that closing bracket was found; matched reports whether brackets nested
+// correctly up to that point.
+func balancedValue(s string) (candidate string, complete, matched bool) {
+	stack := make([]byte, 0, 8)
 	inString := false
 	escaped := false
-	for i := start; i < len(trimmed); i++ {
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if inString {
+			if escaped {
+				escaped = false
+				continue
+			}
+			if ch == '\\' {
+				escaped = true
+				continue
+			}
+			if ch == '"' {
+				inString = false
+			}
+			continue
+		}
+		switch ch {
+		case '"':
+			inString = true
+		case '{', '[':
+			stack = append(stack, ch)
+		case '}', ']':
+			if len(stack) == 0 {
+				return s[:i+1], false, false
+			}
+			open := stack[len(stack)-1]
+			if (ch == '}' && open != '{') || (ch == ']' && open != '[') {
+				return s[:i+1], false, false
+			}
+			stack = stack[:len(stack)-1]
+			if len(stack) == 0 {
+				return s[:i+1], true, true
+			}
+		}
+	}
+	return s, false, true
+}
+
+// repairTruncatedJSON salvages a reply cut off at the token limit by dropping
+// the incomplete trailing value and closing the still-open objects/arrays. It
+// only accepts the result when the repaired text is valid JSON.
+func repairTruncatedJSON(text string) (string, bool) {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return "", false
+	}
+	// Collect element boundaries outside strings. Repair is tried from the end
+	// backwards, so the incomplete tail is discarded while everything before it
+	// is preserved. A bounded number of attempts keeps this cheap for big replies.
+	cuts := []int{len(trimmed)}
+	inString := false
+	escaped := false
+	for i := 0; i < len(trimmed); i++ {
 		ch := trimmed[i]
 		if inString {
 			if escaped {
@@ -196,23 +323,141 @@ func ExtractJSON(text string) (string, error) {
 			}
 			continue
 		}
-		if ch == '"' {
+		switch ch {
+		case '"':
 			inString = true
-			continue
-		}
-		if ch == open {
-			depth++
-		}
-		if ch == closeCh {
-			depth--
-			if depth == 0 {
-				candidate := trimmed[start : i+1]
-				if json.Valid([]byte(candidate)) {
-					return candidate, nil
-				}
-				return "", fmt.Errorf("the model returned malformed JSON")
-			}
+		case ',':
+			cuts = append(cuts, i)
 		}
 	}
-	return "", fmt.Errorf("the model returned incomplete JSON")
+	// Each attempt scans the prefix. Keep the worst case bounded for unusually
+	// large provider replies while still trying the most recent boundaries.
+	maxAttempts := 512
+	if len(trimmed) > 256*1024 {
+		maxAttempts = 32
+	}
+	if len(cuts) > maxAttempts {
+		cuts = cuts[len(cuts)-maxAttempts:]
+	}
+	for i := len(cuts) - 1; i >= 0; i-- {
+		prefix := strings.TrimRight(trimmed[:cuts[i]], " \t\r\n")
+		if repaired, ok := closeJSON(prefix); ok {
+			return repaired, true
+		}
+	}
+	return "", false
+}
+
+// closeJSON appends the missing closers to a syntactically complete prefix. It
+// refuses prefixes that end inside a string or after a key separator because
+// those cannot be repaired without inventing data.
+func closeJSON(prefix string) (string, bool) {
+	stack := make([]byte, 0, 8)
+	inString := false
+	escaped := false
+	for i := 0; i < len(prefix); i++ {
+		ch := prefix[i]
+		if inString {
+			if escaped {
+				escaped = false
+				continue
+			}
+			if ch == '\\' {
+				escaped = true
+				continue
+			}
+			if ch == '"' {
+				inString = false
+			}
+			continue
+		}
+		switch ch {
+		case '"':
+			inString = true
+		case '{', '[':
+			stack = append(stack, ch)
+		case '}', ']':
+			if len(stack) == 0 {
+				return "", false
+			}
+			open := stack[len(stack)-1]
+			if (ch == '}' && open != '{') || (ch == ']' && open != '[') {
+				return "", false
+			}
+			stack = stack[:len(stack)-1]
+		}
+	}
+	if inString || escaped {
+		return "", false
+	}
+	prefix = strings.TrimRight(prefix, " \t\r\n")
+	if strings.HasSuffix(prefix, ",") {
+		prefix = strings.TrimRight(strings.TrimSuffix(prefix, ","), " \t\r\n")
+	}
+	if strings.HasSuffix(prefix, ":") {
+		return "", false
+	}
+	var builder strings.Builder
+	builder.WriteString(prefix)
+	for i := len(stack) - 1; i >= 0; i-- {
+		if stack[i] == '{' {
+			builder.WriteByte('}')
+		} else {
+			builder.WriteByte(']')
+		}
+	}
+	candidate := strings.TrimSpace(builder.String())
+	if !json.Valid([]byte(candidate)) {
+		return "", false
+	}
+	return candidate, true
+}
+
+// stripTrailingCommas removes commas that appear immediately before a closing
+// brace/bracket. Several models emit those even in JSON mode.
+func stripTrailingCommas(text string) string {
+	var builder strings.Builder
+	builder.Grow(len(text))
+	inString := false
+	escaped := false
+	for i := 0; i < len(text); i++ {
+		ch := text[i]
+		if inString {
+			builder.WriteByte(ch)
+			if escaped {
+				escaped = false
+				continue
+			}
+			if ch == '\\' {
+				escaped = true
+				continue
+			}
+			if ch == '"' {
+				inString = false
+			}
+			continue
+		}
+		switch ch {
+		case '"':
+			inString = true
+			builder.WriteByte(ch)
+		case ',':
+			next := i + 1
+			for next < len(text) {
+				switch text[next] {
+				case ' ', '\t', '\r', '\n':
+					next++
+					continue
+				}
+				break
+			}
+			if next < len(text) && (text[next] == '}' || text[next] == ']') {
+				continue
+			}
+			builder.WriteByte(ch)
+		default:
+			builder.WriteByte(ch)
+		}
+	}
+	return builder.String()
 }

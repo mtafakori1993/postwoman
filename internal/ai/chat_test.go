@@ -172,6 +172,31 @@ func TestChatOpenAIRetainsOriginalErrorWhenRetryFails(t *testing.T) {
 // against the API Discovery Agent with a custom OpenAI-compatible provider: a
 // valid {"endpoints":[...]} reply wrapped in a response that also carries nested
 // usage details. It must now be parsed and survive ExtractJSON.
+func TestChatOpenAIReportsLengthFinishReason(t *testing.T) {
+	body := `{"choices":[{"message":{"role":"assistant","content":"partial answer"},"finish_reason":"length"}]}`
+	reply, err := stubChat(t, chatStub(t, http.StatusOK, body))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if reply.FinishReason != "length" {
+		t.Fatalf("finish reason = %q, want length", reply.FinishReason)
+	}
+	if !reply.Truncated() {
+		t.Fatal("expected Truncated() to report true")
+	}
+}
+
+func TestChatOpenAIReportsCamelCaseFinishReason(t *testing.T) {
+	body := `{"choices":[{"message":{"role":"assistant","content":"done"},"finishReason":"stop"}]}`
+	reply, err := stubChat(t, chatStub(t, http.StatusOK, body))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if reply.FinishReason != "stop" || reply.Truncated() {
+		t.Fatalf("finish reason = %q, truncated = %v", reply.FinishReason, reply.Truncated())
+	}
+}
+
 func TestChatOpenAIReportedDiscoveryReply(t *testing.T) {
 	content := `{"endpoints":[{"id":"post-backendurl-login","name":"User Login",` +
 		`"description":"Authenticates a user with email and password.","authRequired":false,` +

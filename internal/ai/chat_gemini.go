@@ -73,7 +73,7 @@ func (c *Client) chatGemini(ctx context.Context, req ChatRequest, model string, 
 	if strings.TrimSpace(text.String()) == "" {
 		return nil, fmt.Errorf("Gemini returned no content: %s", responseSnippet(raw, c.cfg.APIKey))
 	}
-	return &ChatResponse{Content: text.String(), Model: model}, nil
+	return &ChatResponse{Content: text.String(), Model: model, FinishReason: normalizeFinishReason(parsed.Candidates[0].FinishReason)}, nil
 }
 
 func (c *Client) chatOllama(ctx context.Context, req ChatRequest, model string, maxTokens int, temperature float64) (*ChatResponse, error) {
@@ -104,7 +104,8 @@ func (c *Client) chatOllama(ctx context.Context, req ChatRequest, model string, 
 		Message struct {
 			Content string `json:"content"`
 		} `json:"message"`
-		Error json.RawMessage `json:"error"`
+		DoneReason string          `json:"done_reason"`
+		Error      json.RawMessage `json:"error"`
 	}
 	if err := json.Unmarshal(raw, &parsed); err != nil {
 		return nil, fmt.Errorf("Ollama returned an unreadable response: %s", responseSnippet(raw, c.cfg.APIKey))
@@ -115,5 +116,5 @@ func (c *Client) chatOllama(ctx context.Context, req ChatRequest, model string, 
 	if strings.TrimSpace(parsed.Message.Content) == "" {
 		return nil, fmt.Errorf("Ollama returned no content: %s", responseSnippet(raw, c.cfg.APIKey))
 	}
-	return &ChatResponse{Content: parsed.Message.Content, Model: parsed.Model}, nil
+	return &ChatResponse{Content: parsed.Message.Content, Model: parsed.Model, FinishReason: normalizeFinishReason(parsed.DoneReason)}, nil
 }
