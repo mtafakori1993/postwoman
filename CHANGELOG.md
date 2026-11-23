@@ -4,6 +4,15 @@ All notable changes to Postwoman are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and
 [Semantic Versioning](https://semver.org/).
 
+## [1.5.3] - 2026-11-23
+
+### Technical Changes
+
+- Enhance AI enrichment: robust JSON extraction, retry logic, flexible unmarshalling, suggestion filtering, batch size fallback ([793dff4](https://github.com/mtafakori1993/postwoman/commit/793dff4))
+- **ai:** Cover the reported discovery reply with nested usage details ([098bb6d](https://github.com/mtafakori1993/postwoman/commit/098bb6d))
+
+[1.5.3]: https://github.com/mtafakori1993/postwoman/releases/tag/v1.5.3
+
 ## [1.5.1] - 2026-11-23
 
 ### Bug Fixes
