@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"Postwoman/internal/model"
+	"Postwoman/internal/netutil"
 )
 
 // Message is one chat message.
@@ -44,16 +45,35 @@ type Client struct {
 	http *http.Client
 }
 
-// NewClient validates and normalises a provider configuration.
+// NewClient validates and normalises a provider configuration and builds a
+// client that respects the process proxy environment (HTTP_PROXY, HTTPS_PROXY,
+// NO_PROXY) but no explicit application proxy.
 func NewClient(cfg model.AIProviderConfig) (*Client, error) {
+	return NewClientWithProxy(cfg, nil)
+}
+
+// NewClientWithProxy builds a client that routes AI provider traffic through
+// the supplied proxy. A nil (or host-less) proxy keeps the environment default,
+// so callers can pass model.AppSettings.AIProxy() directly.
+func NewClientWithProxy(cfg model.AIProviderConfig, proxy *model.Proxy) (*Client, error) {
 	normalized, err := Normalize(cfg)
 	if err != nil {
 		return nil, err
 	}
 	timeout := time.Duration(normalized.TimeoutSeconds) * time.Second
+	httpClient := &http.Client{Timeout: timeout}
+	if proxy != nil {
+		proxyFunc, err := netutil.ProxyFunc(proxy)
+		if err != nil {
+			return nil, err
+		}
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		transport.Proxy = proxyFunc
+		httpClient.Transport = transport
+	}
 	return &Client{
 		cfg:  normalized,
-		http: &http.Client{Timeout: timeout},
+		http: httpClient,
 	}, nil
 }
 

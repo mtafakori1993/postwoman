@@ -132,14 +132,15 @@ type Manager struct{}
 // NewManager creates the shared AI service.
 func NewManager() *Manager { return &Manager{} }
 
-// ClientFor resolves the globally configured provider and returns a client.
-// AI must be enabled centrally; features never read keys themselves.
+// ClientFor resolves the globally configured provider and returns a client that
+// honours the AI proxy scope. AI must be enabled centrally; features never read
+// keys themselves.
 func (m *Manager) ClientFor(settings model.AppSettings) (*Client, error) {
 	if !settings.AIEnabled {
 		return nil, fmt.Errorf("AI is disabled; enable it in Settings → AI")
 	}
 	cfg := settings.ActiveAIProvider()
-	client, err := NewClient(cfg)
+	client, err := NewClientWithProxy(cfg, settings.AIProxy())
 	if err != nil {
 		return nil, fmt.Errorf("AI provider is not configured: %w", err)
 	}

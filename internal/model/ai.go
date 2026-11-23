@@ -77,3 +77,13 @@ type AIStatus struct {
 	BaseURL  string `json:"baseUrl,omitempty"`
 	Message  string `json:"message,omitempty"`
 }
+
+// ProxyTestResult reports the outcome of probing a proxy host/port from the
+// Network settings screen. It never contains proxy credentials.
+type ProxyTestResult struct {
+	OK        bool   `json:"ok"`
+	Message   string `json:"message"`
+	Host      string `json:"host,omitempty"`
+	Protocol  string `json:"protocol,omitempty"`
+	LatencyMs int64  `json:"latencyMs"`
+}

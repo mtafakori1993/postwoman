@@ -3,11 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -222,6 +227,184 @@ func TestSettingsAndTabsPersist(t *testing.T) {
 		t.Fatalf("tabs did not persist: %v %+v", err, tabs)
 	}
 }
+
+// appTestProxy is a minimal HTTP forward proxy used to prove the global proxy
+// setting is honoured by real API requests. It returns the hit counter.
+func appTestProxy(t *testing.T) (*httptest.Server, *int64) {
+	t.Helper()
+	var hits int64
+	relay := &http.Transport{Proxy: nil}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt64(&hits, 1)
+		req, err := http.NewRequestWithContext(r.Context(), r.Method, r.URL.String(), r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		req.Header = r.Header.Clone()
+		resp, err := relay.RoundTrip(req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		defer resp.Body.Close()
+		w.WriteHeader(resp.StatusCode)
+		_, _ = io.Copy(w, resp.Body)
+	}))
+	t.Cleanup(server.Close)
+	return server, &hits
+}
+
+func proxyModel(t *testing.T, server *httptest.Server) model.Proxy {
+	t.Helper()
+	u, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse proxy url: %v", err)
+	}
+	port, err := strconv.Atoi(u.Port())
+	if err != nil {
+		t.Fatalf("parse proxy port: %v", err)
+	}
+	return model.Proxy{Host: u.Hostname(), Port: port, Protocol: "http"}
+}
+
+func TestGlobalProxyIsAppliedToAPIRequests(t *testing.T) {
+	app := newTestApp(t)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "pong")
+	}))
+	defer upstream.Close()
+
+	proxySrv, hits := appTestProxy(t)
+
+	collection, err := app.CreateCollection(app.workspaceID, "Proxy", "")
+	if err != nil {
+		t.Fatalf("create collection: %v", err)
+	}
+
+	settings := app.GetSettings()
+	proxy := proxyModel(t, proxySrv)
+	settings.Proxy = &proxy
+	settings.ProxyEnabled = true
+	settings.ProxyForRequests = true
+	settings.ProxyForAI = true
+	if err := app.SaveSettings(settings); err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+
+	// Proxy flags and host must survive a round-trip through the store.
+	reloaded := app.GetSettings()
+	if !reloaded.ProxyEnabled || reloaded.Proxy == nil || reloaded.Proxy.Host != proxy.Host {
+		t.Fatalf("proxy settings did not persist: %+v", reloaded.Proxy)
+	}
+
+	request, err := app.CreateRequest(model.Request{
+		CollectionID: collection.ID, Name: "proxied", Method: "GET", URL: upstream.URL,
+		Body: model.Body{Mode: "none"}, Auth: model.Auth{Type: "noauth"},
+	})
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	resp, err := app.SendRequest(*request, nil, nil, nil, false, "")
+	if err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	if resp.Error != "" || resp.StatusCode != 200 {
+		t.Fatalf("unexpected response: error=%q status=%d", resp.Error, resp.StatusCode)
+	}
+	if atomic.LoadInt64(hits) == 0 {
+		t.Fatal("expected the global proxy to relay the API request")
+	}
+}
+
+func TestRequestLevelProxyOverridesGlobal(t *testing.T) {
+	app := newTestApp(t)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "pong")
+	}))
+	defer upstream.Close()
+
+	globalProxy, globalHits := appTestProxy(t)
+	requestProxy, requestHits := appTestProxy(t)
+
+	collection, err := app.CreateCollection(app.workspaceID, "Proxy override", "")
+	if err != nil {
+		t.Fatalf("create collection: %v", err)
+	}
+
+	settings := app.GetSettings()
+	gp := proxyModel(t, globalProxy)
+	settings.Proxy = &gp
+	settings.ProxyEnabled = true
+	settings.ProxyForRequests = true
+	if err := app.SaveSettings(settings); err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+
+	requestProxyModel := proxyModel(t, requestProxy)
+	request, err := app.CreateRequest(model.Request{
+		CollectionID: collection.ID, Name: "override", Method: "GET", URL: upstream.URL,
+		Body: model.Body{Mode: "none"},
+		Auth: model.Auth{Type: "noauth"},
+		Settings: model.Settings{
+			Proxy: &requestProxyModel,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	resp, err := app.SendRequest(*request, nil, nil, nil, false, "")
+	if err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	if resp.Error != "" || resp.StatusCode != 200 {
+		t.Fatalf("unexpected response: error=%q status=%d", resp.Error, resp.StatusCode)
+	}
+	if atomic.LoadInt64(requestHits) == 0 {
+		t.Fatal("expected the per-request proxy to be used")
+	}
+	if atomic.LoadInt64(globalHits) != 0 {
+		t.Fatal("the global proxy must not be used when the request sets its own")
+	}
+}
+
+func TestTestProxyProbesReachableProxy(t *testing.T) {
+	app := newTestApp(t)
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer listener.Close()
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			_ = conn.Close()
+		}
+	}()
+
+	port := listener.Addr().(*net.TCPAddr).Port
+	result := app.TestProxy(model.Proxy{Host: "127.0.0.1", Port: port, Protocol: "http"})
+	if !result.OK {
+		t.Fatalf("expected a reachable proxy, got %+v", result)
+	}
+
+	invalid := app.TestProxy(model.Proxy{Host: "proxy.local", Port: 70000, Protocol: "http"})
+	if invalid.OK {
+		t.Fatalf("expected an invalid port to fail: %+v", invalid)
+	}
+
+	empty := app.TestProxy(model.Proxy{})
+	if empty.OK || empty.Message == "" {
+		t.Fatalf("expected a clear message when no proxy is set: %+v", empty)
+	}
+}
+
 func writeAppFixture(t *testing.T, root, rel, content string) {
 	t.Helper()
 	full := filepath.Join(root, filepath.FromSlash(rel))

@@ -378,6 +378,10 @@ export function StopMockServer(arg1) {
   return window['go']['main']['App']['StopMockServer'](arg1);
 }
 
+export function TestProxy(arg1) {
+  return window['go']['main']['App']['TestProxy'](arg1);
+}
+
 export function UpdateCollection(arg1) {
   return window['go']['main']['App']['UpdateCollection'](arg1);
 }

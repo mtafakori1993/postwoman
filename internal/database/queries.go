@@ -192,6 +192,9 @@ func mergeSettings(base, stored model.AppSettings) model.AppSettings {
 		base.UIFont = "system"
 	}
 	base.Proxy = stored.Proxy
+	base.ProxyEnabled = stored.ProxyEnabled
+	base.ProxyForRequests = stored.ProxyForRequests
+	base.ProxyForAI = stored.ProxyForAI
 	if stored.DefaultHeaders != nil {
 		base.DefaultHeaders = stored.DefaultHeaders
 	}

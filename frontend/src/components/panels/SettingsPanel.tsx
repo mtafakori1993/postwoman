@@ -9,6 +9,7 @@ import { AlertTriangle, Check, Keyboard, Minus, Plus, RotateCcw } from "lucide-r
 import { cn } from "@/lib/utils"
 import { useWorkspaceStore } from "@/stores/workspace"
 import { AISettingsSection } from "./AISettingsSection"
+import { NetworkSettingsSection } from "./NetworkSettingsSection"
 import {
   ACCENTS,
   ACCENT_LABELS,
@@ -363,6 +364,10 @@ export function SettingsPanel() {
             />
           </div>
         </section>
+
+        <Separator />
+
+        <NetworkSettingsSection />
 
         <Separator />
 

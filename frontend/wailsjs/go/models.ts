@@ -272,6 +272,9 @@ export namespace model {
 	    requestTimeout: number;
 	    sslVerification: boolean;
 	    proxy?: Proxy;
+	    proxyEnabled: boolean;
+	    proxyForRequests: boolean;
+	    proxyForAI: boolean;
 	    defaultHeaders: KeyValue[];
 	    historyRetentionDays: number;
 	    scriptExecutionEnabled: boolean;
@@ -313,6 +316,9 @@ export namespace model {
 	        this.requestTimeout = source["requestTimeout"];
 	        this.sslVerification = source["sslVerification"];
 	        this.proxy = this.convertValues(source["proxy"], Proxy);
+	        this.proxyEnabled = source["proxyEnabled"];
+	        this.proxyForRequests = source["proxyForRequests"];
+	        this.proxyForAI = source["proxyForAI"];
 	        this.defaultHeaders = this.convertValues(source["defaultHeaders"], KeyValue);
 	        this.historyRetentionDays = source["historyRetentionDays"];
 	        this.scriptExecutionEnabled = source["scriptExecutionEnabled"];
@@ -2149,6 +2155,26 @@ export namespace model {
 		}
 	}
 	
+	export class ProxyTestResult {
+	    ok: boolean;
+	    message: string;
+	    host?: string;
+	    protocol?: string;
+	    latencyMs: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProxyTestResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.message = source["message"];
+	        this.host = source["host"];
+	        this.protocol = source["protocol"];
+	        this.latencyMs = source["latencyMs"];
+	    }
+	}
 	
 	
 	

@@ -1,16 +1,25 @@
 package model
 
+import "strings"
+
 // AppSettings is the persisted application configuration. It mirrors the
 // AppSettings TypeScript interface so the settings screen round-trips without
 // any translation layer.
 type AppSettings struct {
-	Theme                  string            `json:"theme"`
-	FontSize               int               `json:"fontSize"`
-	EditorFontSize         int               `json:"editorFontSize"`
-	EditorTabSize          int               `json:"editorTabSize"`
-	RequestTimeout         int               `json:"requestTimeout"`
-	SSLVerification        bool              `json:"sslVerification"`
-	Proxy                  *Proxy            `json:"proxy,omitempty"`
+	Theme           string `json:"theme"`
+	FontSize        int    `json:"fontSize"`
+	EditorFontSize  int    `json:"editorFontSize"`
+	EditorTabSize   int    `json:"editorTabSize"`
+	RequestTimeout  int    `json:"requestTimeout"`
+	SSLVerification bool   `json:"sslVerification"`
+	Proxy           *Proxy `json:"proxy,omitempty"`
+	// ProxyEnabled is the master switch for the global proxy. ProxyForRequests
+	// and ProxyForAI select which outbound traffic it applies to so a user can
+	// route API calls through a corporate proxy without also routing local AI
+	// provider traffic (or vice versa).
+	ProxyEnabled           bool              `json:"proxyEnabled"`
+	ProxyForRequests       bool              `json:"proxyForRequests"`
+	ProxyForAI             bool              `json:"proxyForAI"`
 	DefaultHeaders         []KeyValue        `json:"defaultHeaders"`
 	HistoryRetentionDays   int               `json:"historyRetentionDays"`
 	ScriptExecutionEnabled bool              `json:"scriptExecutionEnabled"`
@@ -63,6 +72,9 @@ func DefaultAppSettings() AppSettings {
 		EditorTabSize:          2,
 		RequestTimeout:         30000,
 		SSLVerification:        true,
+		ProxyEnabled:           false,
+		ProxyForRequests:       true,
+		ProxyForAI:             true,
 		DefaultHeaders:         []KeyValue{},
 		HistoryRetentionDays:   30,
 		ScriptExecutionEnabled: true,
@@ -102,6 +114,32 @@ func DefaultAIProvider() AIProviderConfig {
 		MaxTokens:      2048,
 		TimeoutSeconds: 60,
 	}
+}
+
+// RequestsProxy returns the configured global proxy when it should be applied
+// to ordinary API requests, or nil when no proxy applies. A request-level proxy
+// always takes precedence and is handled by the caller.
+func (s AppSettings) RequestsProxy() *Proxy {
+	if !s.ProxyEnabled || !s.ProxyForRequests {
+		return nil
+	}
+	return nonEmptyProxy(s.Proxy)
+}
+
+// AIProxy returns the configured global proxy when it should be applied to AI
+// provider requests, or nil when no proxy applies.
+func (s AppSettings) AIProxy() *Proxy {
+	if !s.ProxyEnabled || !s.ProxyForAI {
+		return nil
+	}
+	return nonEmptyProxy(s.Proxy)
+}
+
+func nonEmptyProxy(p *Proxy) *Proxy {
+	if p == nil || strings.TrimSpace(p.Host) == "" {
+		return nil
+	}
+	return p
 }
 
 // ImportSummary reports what an import operation produced.

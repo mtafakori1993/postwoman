@@ -37,6 +37,7 @@
 - [Linux](#linux)
 - [Where your data lives](#where-your-data-lives)
 - [Usage](#usage)
+- [Proxy settings](#proxy-settings)
 - [AI assistant and providers](#ai-assistant-and-providers)
 - [API Discovery Agent](#api-discovery-agent)
 - [Import and export](#import-and-export)
@@ -80,6 +81,8 @@ The application ships in two Windows formats and two Linux formats:
   plus headers, cookies, metadata, tests and console output.
 - JSONPath extraction, response diffing, JSON Schema generation/validation, and
   copy-as-cURL.
+- Global and per-request proxy support (HTTP, HTTPS, SOCKS5) with credentials,
+  bypass lists and a one-click reachability test.
 
 ### Collections, environments and auth
 - Collections, nested folders, favourites, drag-and-drop reordering and per-collection
@@ -237,6 +240,26 @@ Tabs support right-click actions (close others, close to the right, duplicate,
 pin, copy URL, reopen closed tab). Every shortcut can be rebound in
 **Settings → Keyboard shortcuts**.
 
+## Proxy settings
+
+Point Postwoman at an HTTP, HTTPS or SOCKS5 proxy in **Settings → Network & proxy**.
+The proxy is off by default; when it is enabled you can scope it independently:
+
+- **Use for API requests** routes every request you send, unless the request sets
+  its own proxy in the **Proxy (this request)** editor — a request-level proxy
+  always wins.
+- **Use for AI providers** routes AI chat, model-list and connection tests through
+  the same proxy.
+
+The two scopes are independent, so a corporate proxy can cover API calls without
+capturing local AI provider traffic (or the other way round). The **Bypass list**
+accepts comma-separated hosts and wildcards such as `localhost, *.internal`, and
+**Test** dials the proxy host and port to confirm it is reachable. Proxy
+credentials are stored locally with your settings and are never logged.
+
+When no proxy is enabled, requests still honour the operating system proxy
+environment (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`).
+
 ## AI assistant and providers
 
 AI is optional and disabled by default. Configure it once in **Settings → AI
@@ -264,7 +287,8 @@ Supported provider kinds:
 returned to the renderer, logged, or sent anywhere except the provider you
 configured. The AI assistant only sends request/response context when you run a
 prompt. Discovery AI enrichment redacts detected secrets and respects the
-configured file limit.
+configured file limit. AI traffic can be routed through a proxy — see
+[Proxy settings](#proxy-settings).
 
 The **AI assistant** is available from the top bar or command palette. Presets
 explain requests, errors and responses, generate tests and JSON Schema, and suggest

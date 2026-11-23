@@ -190,6 +190,8 @@ export function StartMockServer(arg1:string):Promise<void>;
 
 export function StopMockServer(arg1:string):Promise<void>;
 
+export function TestProxy(arg1:model.Proxy):Promise<model.ProxyTestResult>;
+
 export function UpdateCollection(arg1:model.Collection):Promise<void>;
 
 export function UpdateEnvironment(arg1:model.Environment):Promise<void>;

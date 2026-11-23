@@ -39,6 +39,7 @@ import type {
   AIConnectionTest,
   AIModelList,
   AIStatus,
+  ProxyTestResult,
   DiscoveryOptions,
   DiscoveryDirListing,
   DiscoverySession,
@@ -46,6 +47,7 @@ import type {
   DiscoveryGenerateRequest,
   AuthConfig,
   OAuth2Config,
+  ProxyConfig,
 } from "../types"
 
 export type * from "../types"
@@ -223,6 +225,11 @@ export const aiTestConnection = (config: AIProviderConfig) =>
 export const aiListModels = (config: AIProviderConfig) =>
   guard<AIModelList>(() => App.AIListModels(asModel<model.AIProviderConfig>(config)))
 export const aiStatus = () => guard<AIStatus>(() => App.AIStatus())
+
+// ------------------------------------------------------------- network proxy
+
+export const testProxy = (proxy: ProxyConfig) =>
+  guard<ProxyTestResult>(() => App.TestProxy(asModel<model.Proxy>(proxy)))
 
 // -------------------------------------------------------- discovery agent
 

@@ -68,6 +68,7 @@ export type AIProviderDescriptor = Plain<model.AIProviderDescriptor>
 export type AIConnectionTest = Plain<model.AIConnectionTest>
 export type AIModelList = Plain<model.AIModelList>
 export type AIStatus = Plain<model.AIStatus>
+export type ProxyTestResult = Plain<model.ProxyTestResult>
 export type OAuth2StartResult = Plain<model.OAuth2StartResult>
 
 // --- API discovery agent ---------------------------------------------------

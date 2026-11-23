@@ -28,6 +28,7 @@ import (
 	"Postwoman/internal/jsonutil"
 	"Postwoman/internal/mockserver"
 	"Postwoman/internal/model"
+	"Postwoman/internal/netutil"
 	"Postwoman/internal/scripting"
 	"Postwoman/internal/variables"
 	"Postwoman/internal/websocket"
@@ -343,6 +344,13 @@ func (a *App) sendRequestCore(ctx context.Context, request model.Request, enviro
 		}
 		if !found {
 			request.Headers = append(request.Headers, model.KeyValue{Key: "Cache-Control", Value: "no-cache", Enabled: true})
+		}
+	}
+	// Apply the global proxy unless the request carries its own; a per-request
+	// proxy always wins so the "Proxy (this request)" editor stays authoritative.
+	if request.Settings.Proxy == nil || strings.TrimSpace(request.Settings.Proxy.Host) == "" {
+		if proxy := settings.RequestsProxy(); proxy != nil {
+			request.Settings.Proxy = proxy
 		}
 	}
 
@@ -1696,10 +1704,12 @@ func (a *App) resolveAIConfig(input model.AIProviderConfig) model.AIProviderConf
 }
 
 // AITestConnection probes the configured provider and reports connectivity
-// without ever returning the API key.
+// without ever returning the API key. It routes through the AI proxy when one
+// is enabled so the result reflects the real request path.
 func (a *App) AITestConnection(input model.AIProviderConfig) model.AIConnectionTest {
+	settings := a.repo.GetSettingsModel(a.ctx)
 	cfg := a.resolveAIConfig(input)
-	client, err := ai.NewClient(cfg)
+	client, err := ai.NewClientWithProxy(cfg, settings.AIProxy())
 	if err != nil {
 		return model.AIConnectionTest{OK: false, Provider: cfg.Name, Message: "Configuration invalid: " + err.Error()}
 	}
@@ -1714,8 +1724,9 @@ func (a *App) AITestConnection(input model.AIProviderConfig) model.AIConnectionT
 
 // AIListModels returns the model identifiers advertised by the provider.
 func (a *App) AIListModels(input model.AIProviderConfig) (model.AIModelList, error) {
+	settings := a.repo.GetSettingsModel(a.ctx)
 	cfg := a.resolveAIConfig(input)
-	client, err := ai.NewClient(cfg)
+	client, err := ai.NewClientWithProxy(cfg, settings.AIProxy())
 	if err != nil {
 		return model.AIModelList{Provider: cfg.Name}, err
 	}
@@ -1744,13 +1755,40 @@ func (a *App) AIStatus() model.AIStatus {
 		status.Message = "AI is disabled in Settings → AI"
 		return status
 	}
-	if _, err := ai.NewClient(cfg); err != nil {
+	if _, err := ai.NewClientWithProxy(cfg, settings.AIProxy()); err != nil {
 		status.Message = err.Error()
 		return status
 	}
 	status.Ready = true
 	status.Message = "AI is configured"
 	return status
+}
+
+// TestProxy confirms the desktop app can reach the configured proxy by dialing
+// its host and port. It validates the address first so the UI can distinguish a
+// typo from an unreachable proxy. Credentials are never echoed back.
+func (a *App) TestProxy(input model.Proxy) model.ProxyTestResult {
+	result := model.ProxyTestResult{Host: input.Host, Protocol: input.Protocol}
+	normalized, err := netutil.NormalizeProxy(&input)
+	if err != nil {
+		result.Message = err.Error()
+		return result
+	}
+	if normalized == nil {
+		result.Message = "Set a proxy host and port first."
+		return result
+	}
+	result.Host = normalized.Host
+	result.Protocol = normalized.Protocol
+	started := time.Now()
+	if err := netutil.Probe(normalized, 5*time.Second); err != nil {
+		result.Message = err.Error()
+		return result
+	}
+	result.OK = true
+	result.LatencyMs = time.Since(started).Milliseconds()
+	result.Message = fmt.Sprintf("Proxy %s:%d is reachable.", normalized.Host, normalized.Port)
+	return result
 }
 
 // AIAssist runs a chat completion through the shared AI service. Every AI
