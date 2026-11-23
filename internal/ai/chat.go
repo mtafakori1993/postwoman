@@ -53,36 +53,33 @@ func (c *Client) chatOpenAI(ctx context.Context, req ChatRequest, model string, 
 	}
 	ep := chatEndpoint(c.cfg)
 	raw, status, err := c.doJSON(ctx, "POST", ep.URL, ep.Header, payload)
-	if err != nil && req.JSONMode && status == 400 {
-		// Some OpenAI-compatible gateways reject response_format; retry without.
-		delete(payload, "response_format")
-		raw, _, err = c.doJSON(ctx, "POST", ep.URL, ep.Header, payload)
+	if err != nil && status == 400 {
+		// OpenAI-compatible gateways differ in which optional parameters they
+		// accept: o-series models reject max_tokens, others reject
+		// response_format or temperature. Retry once with only the required
+		// fields so a single unsupported parameter does not fail the request.
+		retry := map[string]any{"model": model, "messages": messages}
+		if retryRaw, _, retryErr := c.doJSON(ctx, "POST", ep.URL, ep.Header, retry); retryErr == nil {
+			raw, err = retryRaw, nil
+		}
+		// If the retry also fails, keep the original error: it carries the
+		// provider's response body, which is more useful than the second error.
 	}
 	if err != nil {
 		return nil, err
 	}
-	var parsed struct {
-		Model   string `json:"model"`
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-		Usage map[string]int `json:"usage"`
-		Error *struct {
-			Message string `json:"message"`
-		} `json:"error"`
-	}
+	var parsed openAIChatResponse
 	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return nil, fmt.Errorf("%s returned an unexpected response", c.cfg.Name)
+		return nil, fmt.Errorf("%s returned an unreadable response: %s", c.cfg.Name, responseSnippet(raw, c.cfg.APIKey))
 	}
-	if parsed.Error != nil && parsed.Error.Message != "" {
-		return nil, fmt.Errorf("%s: %s", c.cfg.Name, Redact(parsed.Error.Message, c.cfg.APIKey))
+	if message := errorMessage(parsed.Error); message != "" {
+		return nil, fmt.Errorf("%s: %s", c.cfg.Name, Redact(message, c.cfg.APIKey))
 	}
-	if len(parsed.Choices) == 0 || strings.TrimSpace(parsed.Choices[0].Message.Content) == "" {
-		return nil, fmt.Errorf("%s returned no content", c.cfg.Name)
+	content := strings.TrimSpace(parsed.content())
+	if content == "" {
+		return nil, fmt.Errorf("%s returned no content: %s", c.cfg.Name, responseSnippet(raw, c.cfg.APIKey))
 	}
-	return &ChatResponse{Content: parsed.Choices[0].Message.Content, Model: parsed.Model, Usage: parsed.Usage}, nil
+	return &ChatResponse{Content: content, Model: parsed.Model, Usage: parseUsage(parsed.Usage)}, nil
 }
 
 func (c *Client) chatAnthropic(ctx context.Context, req ChatRequest, model string, maxTokens int, temperature float64) (*ChatResponse, error) {
@@ -117,16 +114,14 @@ func (c *Client) chatAnthropic(ctx context.Context, req ChatRequest, model strin
 			Type string `json:"type"`
 			Text string `json:"text"`
 		} `json:"content"`
-		Usage map[string]int `json:"usage"`
-		Error *struct {
-			Message string `json:"message"`
-		} `json:"error"`
+		Usage json.RawMessage `json:"usage"`
+		Error json.RawMessage `json:"error"`
 	}
 	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return nil, fmt.Errorf("Anthropic returned an unexpected response")
+		return nil, fmt.Errorf("Anthropic returned an unreadable response: %s", responseSnippet(raw, c.cfg.APIKey))
 	}
-	if parsed.Error != nil && parsed.Error.Message != "" {
-		return nil, fmt.Errorf("Anthropic: %s", Redact(parsed.Error.Message, c.cfg.APIKey))
+	if message := errorMessage(parsed.Error); message != "" {
+		return nil, fmt.Errorf("Anthropic: %s", Redact(message, c.cfg.APIKey))
 	}
 	var text strings.Builder
 	for _, part := range parsed.Content {
@@ -135,7 +130,7 @@ func (c *Client) chatAnthropic(ctx context.Context, req ChatRequest, model strin
 		}
 	}
 	if strings.TrimSpace(text.String()) == "" {
-		return nil, fmt.Errorf("Anthropic returned no content")
+		return nil, fmt.Errorf("Anthropic returned no content: %s", responseSnippet(raw, c.cfg.APIKey))
 	}
-	return &ChatResponse{Content: text.String(), Model: parsed.Model, Usage: parsed.Usage}, nil
+	return &ChatResponse{Content: text.String(), Model: parsed.Model, Usage: parseUsage(parsed.Usage)}, nil
 }

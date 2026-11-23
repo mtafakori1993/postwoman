@@ -52,28 +52,26 @@ func (c *Client) chatGemini(ctx context.Context, req ChatRequest, model string, 
 		PromptFeedback *struct {
 			BlockReason string `json:"blockReason"`
 		} `json:"promptFeedback"`
-		Error *struct {
-			Message string `json:"message"`
-		} `json:"error"`
+		Error json.RawMessage `json:"error"`
 	}
 	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return nil, fmt.Errorf("Gemini returned an unexpected response")
+		return nil, fmt.Errorf("Gemini returned an unreadable response: %s", responseSnippet(raw, c.cfg.APIKey))
 	}
-	if parsed.Error != nil && parsed.Error.Message != "" {
-		return nil, fmt.Errorf("Gemini: %s", Redact(parsed.Error.Message, c.cfg.APIKey))
+	if message := errorMessage(parsed.Error); message != "" {
+		return nil, fmt.Errorf("Gemini: %s", Redact(message, c.cfg.APIKey))
 	}
 	if parsed.PromptFeedback != nil && parsed.PromptFeedback.BlockReason != "" {
 		return nil, fmt.Errorf("Gemini blocked the request (%s)", parsed.PromptFeedback.BlockReason)
 	}
 	if len(parsed.Candidates) == 0 {
-		return nil, fmt.Errorf("Gemini returned no candidates")
+		return nil, fmt.Errorf("Gemini returned no candidates: %s", responseSnippet(raw, c.cfg.APIKey))
 	}
 	var text strings.Builder
 	for _, part := range parsed.Candidates[0].Content.Parts {
 		text.WriteString(part.Text)
 	}
 	if strings.TrimSpace(text.String()) == "" {
-		return nil, fmt.Errorf("Gemini returned no content")
+		return nil, fmt.Errorf("Gemini returned no content: %s", responseSnippet(raw, c.cfg.APIKey))
 	}
 	return &ChatResponse{Content: text.String(), Model: model}, nil
 }
@@ -106,16 +104,16 @@ func (c *Client) chatOllama(ctx context.Context, req ChatRequest, model string, 
 		Message struct {
 			Content string `json:"content"`
 		} `json:"message"`
-		Error string `json:"error"`
+		Error json.RawMessage `json:"error"`
 	}
 	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return nil, fmt.Errorf("Ollama returned an unexpected response")
+		return nil, fmt.Errorf("Ollama returned an unreadable response: %s", responseSnippet(raw, c.cfg.APIKey))
 	}
-	if parsed.Error != "" {
-		return nil, fmt.Errorf("Ollama: %s", Redact(parsed.Error, c.cfg.APIKey))
+	if message := errorMessage(parsed.Error); message != "" {
+		return nil, fmt.Errorf("Ollama: %s", Redact(message, c.cfg.APIKey))
 	}
 	if strings.TrimSpace(parsed.Message.Content) == "" {
-		return nil, fmt.Errorf("Ollama returned no content")
+		return nil, fmt.Errorf("Ollama returned no content: %s", responseSnippet(raw, c.cfg.APIKey))
 	}
 	return &ChatResponse{Content: parsed.Message.Content, Model: parsed.Model}, nil
 }
