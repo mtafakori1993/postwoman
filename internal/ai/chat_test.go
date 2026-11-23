@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -164,5 +165,45 @@ func TestChatOpenAIRetainsOriginalErrorWhenRetryFails(t *testing.T) {
 	_, err := stubChat(t, server)
 	if err == nil || !strings.Contains(err.Error(), "invalid api key") {
 		t.Fatalf("error = %v, want the original provider error", err)
+	}
+}
+
+// TestChatOpenAIReportedDiscoveryReply reproduces the exact failure reported
+// against the API Discovery Agent with a custom OpenAI-compatible provider: a
+// valid {"endpoints":[...]} reply wrapped in a response that also carries nested
+// usage details. It must now be parsed and survive ExtractJSON.
+func TestChatOpenAIReportedDiscoveryReply(t *testing.T) {
+	content := `{"endpoints":[{"id":"post-backendurl-login","name":"User Login",` +
+		`"description":"Authenticates a user with email and password.","authRequired":false,` +
+		`"authType":"unknown","requestBody":{"email":"string","password":"string"},` +
+		`"queryParams":[],"pathParams":[],"headers":[{"name":"Content-Type","in":"header",` +
+		`"type":"string","required":true,"description":"Expected to be application/json."}],` +
+		`"statusCodes":[200,400,401,500],"confidence":90,"notes":["The path includes ':backendURL'."]}]}`
+
+	body, err := json.Marshal(map[string]any{
+		"model": "custom-model",
+		"choices": []any{
+			map[string]any{"message": map[string]any{"role": "assistant", "content": content}},
+		},
+		"usage": map[string]any{
+			"prompt_tokens": 900, "completion_tokens": 500, "total_tokens": 1400,
+			"prompt_tokens_details":     map[string]any{"cached_tokens": 0},
+			"completion_tokens_details": map[string]any{"reasoning_tokens": 0},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	reply, err := stubChat(t, chatStub(t, http.StatusOK, string(body)))
+	if err != nil {
+		t.Fatalf("chat failed: %v", err)
+	}
+	extracted, err := ExtractJSON(reply.Content)
+	if err != nil {
+		t.Fatalf("ExtractJSON: %v", err)
+	}
+	if !strings.Contains(extracted, `"id":"post-backendurl-login"`) {
+		t.Fatalf("unexpected extracted JSON: %s", extracted)
 	}
 }
