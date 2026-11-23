@@ -4,6 +4,15 @@ All notable changes to Postwoman are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and
 [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] - 2026-11-23
+
+### Features
+
+- **network:** Add global proxy settings for API and AI provider requests ([a134863](https://github.com/mtafakori1993/postwoman/commit/a134863))
+- **discovery:** Offer a way back when a project yields no endpoints ([8463792](https://github.com/mtafakori1993/postwoman/commit/8463792))
+
+[1.5.0]: https://github.com/mtafakori1993/postwoman/releases/tag/v1.5.0
+
 ## [1.4.1] - 2026-11-22
 
 > Supersedes v1.4.0, whose Windows build failed before any release assets were published.

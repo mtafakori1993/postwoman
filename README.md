@@ -22,7 +22,7 @@
 </p>
 
 <!-- version:start -->
-**Current version:** `1.4.1`
+**Current version:** `1.5.0`
 <!-- version:end -->
 
 > Windows 10/11 x64 and Linux x86_64 are the supported release platforms. macOS is

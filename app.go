@@ -37,7 +37,7 @@ import (
 // appVersion is the fallback version for local development builds. Release
 // builds inject the repository VERSION through -ldflags "-X main.appVersion=…"
 // so the application, installer and archives all report the same value.
-var appVersion = "1.4.1"
+var appVersion = "1.5.0"
 
 // App is the Wails-bound backend. Every exported method is callable from the
 // React frontend through the generated bindings in frontend/wailsjs/go/main.
