@@ -4,6 +4,14 @@ All notable changes to Postwoman are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and
 [Semantic Versioning](https://semver.org/).
 
+## [1.5.1] - 2026-11-23
+
+### Bug Fixes
+
+- **ai:** Parse OpenAI-compatible responses leniently and explain failures ([183dcd1](https://github.com/mtafakori1993/postwoman/commit/183dcd1))
+
+[1.5.1]: https://github.com/mtafakori1993/postwoman/releases/tag/v1.5.1
+
 ## [1.5.0] - 2026-11-23
 
 ### Features
